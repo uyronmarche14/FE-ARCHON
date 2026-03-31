@@ -25,6 +25,17 @@ Copy `.env.example` to `.env.local` and set:
 - `NEXT_PUBLIC_APP_URL`
 - `NEXT_PUBLIC_API_URL`
 
+Additional templates:
+
+- `.env.test.example`
+- `.env.production.example`
+
+Typical setup:
+
+```bash
+cp .env.example .env.local
+```
+
 ## Current Scope
 
 This scaffold currently includes:

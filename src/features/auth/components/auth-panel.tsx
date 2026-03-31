@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { showInfoToast } from "@/lib/toast";
 
 type AuthPanelProps = {
   mode: "login" | "signup";
@@ -30,6 +33,13 @@ const copyByMode = {
 
 export function AuthPanel({ mode }: AuthPanelProps) {
   const copy = copyByMode[mode];
+
+  function handlePlaceholderSubmit() {
+    showInfoToast(
+      mode === "login" ? "Login flow comes next." : "Signup flow comes next.",
+      "This placeholder is now wired to the shared toast system from Story 02.2.",
+    );
+  }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-xl items-center px-6 py-12">
@@ -63,7 +73,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
               type="password"
             />
           </label>
-          <Button className="w-full" type="button">
+          <Button className="w-full" type="button" onClick={handlePlaceholderSubmit}>
             {copy.cta}
           </Button>
         </form>

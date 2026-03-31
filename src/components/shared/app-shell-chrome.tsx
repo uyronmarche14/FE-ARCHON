@@ -1,5 +1,8 @@
+"use client";
+
 import type { Route } from "next";
 import Link from "next/link";
+import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
 
 type AppShellChromeProps = {
   children: React.ReactNode;
@@ -14,6 +17,8 @@ const projectLinks = [
 ] as const satisfies ReadonlyArray<{ href: Route; label: string }>;
 
 export function AppShellChrome({ children }: AppShellChromeProps) {
+  const { status } = useAuthSession();
+
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto grid min-h-screen max-w-6xl lg:grid-cols-[240px_1fr]">
@@ -40,7 +45,7 @@ export function AppShellChrome({ children }: AppShellChromeProps) {
           <header className="flex items-center justify-between border-b border-border px-6 py-4">
             <div>
               <p className="font-medium">Workspace</p>
-              <p className="text-sm text-muted-foreground">Structure only</p>
+              <p className="text-sm text-muted-foreground">Session: {status}</p>
             </div>
             <Link
               href="/signup"
