@@ -8,6 +8,7 @@ import { ArrowRight, CheckCircle2, LoaderCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useLogin } from "@/features/auth/hooks/use-login";
 import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
 import { useSignup } from "@/features/auth/hooks/use-signup";
 import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
@@ -51,6 +52,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
   const copy = copyByMode[mode];
   const router = useRouter();
   const searchParams = useSearchParams();
+  const loginMutation = useLogin();
   const signupMutation = useSignup();
   const { setSession } = useAuthSession();
   const [formValues, setFormValues] = useState<SignupFormValues>({
@@ -62,25 +64,24 @@ export function AuthPanel({ mode }: AuthPanelProps) {
   const [formError, setFormError] = useState<string | null>(null);
 
   const nextPath = useMemo(
-    () => resolvePostSignupRedirect(searchParams.get("next")),
+    () => resolvePostAuthRedirect(searchParams.get("next")),
     [searchParams],
   );
 
+  const isSubmitting = loginMutation.isPending || signupMutation.isPending;
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (mode === "login") {
-      setFormError("Login will be enabled in the next auth step.");
-      return;
-    }
-
     const normalizedValues = {
       name: formValues.name.trim().replace(/\s+/g, " "),
       email: formValues.email.trim().toLowerCase(),
       password: formValues.password,
     };
 
-    const validationErrors = validateSignupForm(normalizedValues);
+    const validationErrors =
+      mode === "login"
+        ? validateLoginForm(normalizedValues)
+        : validateSignupForm(normalizedValues);
     setFieldErrors(validationErrors);
     setFormError(null);
 
@@ -89,14 +90,23 @@ export function AuthPanel({ mode }: AuthPanelProps) {
     }
 
     try {
-      const signupResponse = await signupMutation.mutateAsync(normalizedValues);
+      const authResponse =
+        mode === "login"
+          ? await loginMutation.mutateAsync({
+              email: normalizedValues.email,
+              password: normalizedValues.password,
+            })
+          : await signupMutation.mutateAsync(normalizedValues);
 
       setSession({
-        user: signupResponse.user,
-        accessToken: signupResponse.accessToken,
+        user: authResponse.user,
+        accessToken: authResponse.accessToken,
       });
 
-      showSuccessToast("Account created", "Your workspace is ready.");
+      showSuccessToast(
+        mode === "login" ? "Logged in" : "Account created",
+        mode === "login" ? "Welcome back to Archon." : "Your workspace is ready.",
+      );
       router.replace(nextPath);
     } catch (error) {
       if (isApiClientError(error)) {
@@ -108,10 +118,19 @@ export function AuthPanel({ mode }: AuthPanelProps) {
 
         setFormError(error.message);
       } else {
-        setFormError("Unable to create your account right now.");
+        setFormError(
+          mode === "login"
+            ? "Unable to log you in right now."
+            : "Unable to create your account right now.",
+        );
       }
 
-      showApiErrorToast(error, "Unable to create your account right now.");
+      showApiErrorToast(
+        error,
+        mode === "login"
+          ? "Unable to log you in right now."
+          : "Unable to create your account right now.",
+      );
     }
   }
 
@@ -260,16 +279,16 @@ export function AuthPanel({ mode }: AuthPanelProps) {
           <Button
             size="lg"
             type="submit"
-            disabled={signupMutation.isPending}
+            disabled={isSubmitting}
             className={cn(
               "mt-1.5 h-11 w-full rounded-[8px] text-sm font-semibold shadow-[0_12px_24px_rgba(53,64,209,0.22)]",
               mode === "login" && "bg-primary hover:bg-primary/90",
             )}
           >
-            {signupMutation.isPending ? (
+            {isSubmitting ? (
               <>
                 <LoaderCircle className="size-4 animate-spin" />
-                Creating account
+                {mode === "login" ? "Signing in" : "Creating account"}
               </>
             ) : (
               <>
@@ -305,6 +324,22 @@ function GoogleIcon({ className }: { className?: string }) {
       />
     </svg>
   );
+}
+
+function validateLoginForm(values: SignupFormValues): SignupFormErrors {
+  const errors: SignupFormErrors = {};
+
+  if (!values.email.trim()) {
+    errors.email = "Email is required.";
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  if (!values.password) {
+    errors.password = "Password is required.";
+  }
+
+  return errors;
 }
 
 function validateSignupForm(values: SignupFormValues): SignupFormErrors {
@@ -351,7 +386,7 @@ function mapApiErrorDetailsToFormErrors(details: ApiErrorDetails | undefined) {
   return nextErrors;
 }
 
-function resolvePostSignupRedirect(nextPath: string | null): Route {
+function resolvePostAuthRedirect(nextPath: string | null): Route {
   if (!nextPath || !nextPath.startsWith("/") || nextPath.startsWith("//")) {
     return "/app";
   }

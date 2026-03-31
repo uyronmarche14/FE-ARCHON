@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   CalendarRange,
@@ -16,8 +16,10 @@ import {
   X,
 } from "lucide-react";
 import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
+import { useLogout } from "@/features/auth/hooks/use-logout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
 
 type AppShellChromeProps = {
   children: React.ReactNode;
@@ -45,14 +47,31 @@ const navigation = [
 ] as const;
 
 export function AppShellChrome({ children }: AppShellChromeProps) {
+  const router = useRouter();
   const pathname = usePathname();
-  const { session, status } = useAuthSession();
+  const logoutMutation = useLogout();
+  const { clearSession, session, status } = useAuthSession();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const activeLabel = useMemo(() => {
     const match = navigation.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
     return match?.label ?? "Workspace";
   }, [pathname]);
+
+  async function handleLogout() {
+    try {
+      await logoutMutation.mutateAsync();
+      showSuccessToast("Logged out", "Your session has been closed.");
+    } catch (error) {
+      showApiErrorToast(
+        error,
+        "This browser session was cleared, but the server could not confirm logout.",
+      );
+    } finally {
+      clearSession();
+      router.replace("/login");
+    }
+  }
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
@@ -124,7 +143,7 @@ export function AppShellChrome({ children }: AppShellChromeProps) {
             {session?.user.name ?? "Workspace visitor"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {session?.user.email ?? "Auth routes are next"}
+            {session?.user.email ?? "Authentication required"}
           </p>
           <div className="mt-2">
             <Badge variant={status === "authenticated" ? "success" : "muted"}>
@@ -198,8 +217,13 @@ export function AppShellChrome({ children }: AppShellChromeProps) {
               <Button size="icon-xs" variant="outline">
                 <Bell className="size-3.5" />
               </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/login">Auth route</Link>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                disabled={logoutMutation.isPending}
+              >
+                {logoutMutation.isPending ? "Logging out" : "Log out"}
               </Button>
             </div>
           </div>

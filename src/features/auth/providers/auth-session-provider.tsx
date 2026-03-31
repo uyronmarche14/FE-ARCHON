@@ -24,6 +24,7 @@ import {
   getAccessToken,
   setAccessToken as setStoredAccessToken,
 } from "@/services/http/auth-token-store";
+import type { AuthMeResponse, AuthRefreshResponse } from "@/contracts/auth";
 
 export type AuthSession = {
   user: AuthUser;
@@ -42,14 +43,6 @@ type AuthSessionContextValue = {
 
 type AuthSessionProviderProps = {
   children: ReactNode;
-};
-
-type AuthMeResponse = {
-  user: AuthUser;
-};
-
-type AuthRefreshResponse = {
-  accessToken: string;
 };
 
 const authSessionQueryKey = ["auth", "me"] as const;
@@ -148,6 +141,26 @@ export function useAuthSession() {
 }
 
 async function fetchAuthSession(): Promise<AuthSession | null> {
+  const currentAccessToken = getAccessToken();
+
+  if (currentAccessToken) {
+    const currentSession = await fetchCurrentUserSession();
+
+    if (currentSession) {
+      return currentSession;
+    }
+  }
+
+  const refreshedToken = await refreshAccessToken();
+
+  if (!refreshedToken) {
+    return null;
+  }
+
+  return fetchCurrentUserSession();
+}
+
+async function fetchCurrentUserSession(): Promise<AuthSession | null> {
   try {
     const response = await apiClient.get<ApiEnvelope<AuthMeResponse>>("/auth/me", {
       _skipAuthRefresh: true,
@@ -165,7 +178,12 @@ async function fetchAuthSession(): Promise<AuthSession | null> {
   } catch (error) {
     const normalizedError = normalizeApiClientError(error);
 
-    if (isExpectedBootstrapError(normalizedError)) {
+    if (normalizedError.status === 401) {
+      clearStoredAccessToken();
+      return null;
+    }
+
+    if (normalizedError.status === 404 || normalizedError.status === 501) {
       return null;
     }
 
@@ -197,8 +215,4 @@ async function refreshAccessToken() {
     clearStoredAccessToken();
     return null;
   }
-}
-
-function isExpectedBootstrapError(error: ApiClientError) {
-  return error.status === 401 || error.status === 404 || error.status === 501;
 }

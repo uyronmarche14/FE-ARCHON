@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { AuthPanel } from "@/features/auth/components/auth-panel";
 
@@ -7,5 +8,13 @@ export const metadata: Metadata = {
 };
 
 export default function LoginPage() {
-  return <AuthPanel mode="login" />;
+  return (
+    <Suspense fallback={<AuthPanelFallback />}>
+      <AuthPanel mode="login" />
+    </Suspense>
+  );
+}
+
+function AuthPanelFallback() {
+  return <div className="min-h-screen bg-background" />;
 }
