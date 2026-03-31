@@ -42,6 +42,7 @@ type AuthSessionContextValue = {
 };
 
 type AuthSessionProviderProps = {
+  bootstrapSession?: boolean;
   children: ReactNode;
 };
 
@@ -49,11 +50,15 @@ const authSessionQueryKey = ["auth", "me"] as const;
 
 const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
 
-export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
+export function AuthSessionProvider({
+  bootstrapSession = true,
+  children,
+}: AuthSessionProviderProps) {
   const queryClient = useQueryClient();
   const sessionQuery = useQuery({
     queryKey: authSessionQueryKey,
     queryFn: fetchAuthSession,
+    enabled: bootstrapSession,
   });
 
   useEffect(() => {
@@ -81,11 +86,12 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     }
   }, [sessionQuery.data]);
 
-  const status = sessionQuery.isPending
-    ? "loading"
-    : sessionQuery.data
-      ? "authenticated"
-      : "anonymous";
+  const status =
+    bootstrapSession && sessionQuery.isPending
+      ? "loading"
+      : sessionQuery.data
+        ? "authenticated"
+        : "anonymous";
 
   const value: AuthSessionContextValue = {
     session: sessionQuery.data ?? null,

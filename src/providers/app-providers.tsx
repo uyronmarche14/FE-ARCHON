@@ -1,6 +1,5 @@
 "use client";
 
-import { AuthSessionProvider } from "@/features/auth/providers/auth-session-provider";
 import { QueryProvider } from "@/providers/query-provider";
 import { ToasterProvider } from "@/providers/toaster-provider";
 
@@ -11,10 +10,8 @@ type AppProvidersProps = {
 export function AppProviders({ children }: AppProvidersProps) {
   return (
     <QueryProvider>
-      <AuthSessionProvider>
-        {children}
-        <ToasterProvider />
-      </AuthSessionProvider>
+      {children}
+      <ToasterProvider />
     </QueryProvider>
   );
 }
