@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ApiEnvelope } from "@/contracts/api";
+import type { AuthUser } from "@/contracts/auth";
 import {
   ApiClientError,
   isApiClientError,
@@ -24,17 +25,8 @@ import {
   setAccessToken as setStoredAccessToken,
 } from "@/services/http/auth-token-store";
 
-type AuthRole = "ADMIN" | "MEMBER";
-
-export type AuthSessionUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: AuthRole;
-};
-
 export type AuthSession = {
-  user: AuthSessionUser;
+  user: AuthUser;
   accessToken: string | null;
 };
 
@@ -53,7 +45,7 @@ type AuthSessionProviderProps = {
 };
 
 type AuthMeResponse = {
-  user: AuthSessionUser;
+  user: AuthUser;
 };
 
 type AuthRefreshResponse = {

@@ -1,32 +1,45 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowRight, CheckCircle2, LoaderCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { showInfoToast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
+import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
+import { useSignup } from "@/features/auth/hooks/use-signup";
+import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
+import type { ApiErrorDetails } from "@/contracts/api";
+import { isApiClientError } from "@/services/http/api-client-error";
 
 type AuthPanelProps = {
   mode: "login" | "signup";
 };
 
+type SignupFormValues = {
+  name: string;
+  email: string;
+  password: string;
+};
+
+type SignupFormErrors = Partial<Record<keyof SignupFormValues, string>>;
+
 const copyByMode = {
   login: {
     eyebrow: "Welcome back",
-    title: "Log in to your workspace",
-    description:
-      "Access your projects, boards, and task history.",
+    title: "Login to your account",
+    description: "Access your projects, boards, and task history.",
     cta: "Log in",
-    footerLabel: "Need an account?",
+    footerLabel: "Don't have an account?",
     footerHref: "/signup",
-    footerText: "Create one",
+    footerText: "Sign up",
   },
   signup: {
     eyebrow: "Get started",
     title: "Create your account",
-    description:
-      "Set up your workspace and start managing projects in minutes.",
+    description: "Set up your workspace and start managing projects in minutes.",
     cta: "Create account",
     footerLabel: "Already have an account?",
     footerHref: "/login",
@@ -34,129 +47,314 @@ const copyByMode = {
   },
 } as const;
 
-const featurePoints = [
-  "Calm task boards with clean state transitions",
-  "Project shells built for mobile, tablet, and desktop",
-  "Audit-friendly status and activity structure",
-];
-
 export function AuthPanel({ mode }: AuthPanelProps) {
   const copy = copyByMode[mode];
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const signupMutation = useSignup();
+  const { setSession } = useAuthSession();
+  const [formValues, setFormValues] = useState<SignupFormValues>({
+    name: "",
+    email: "",
+    password: "",
+  });
+  const [fieldErrors, setFieldErrors] = useState<SignupFormErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
 
-  function handlePlaceholderSubmit() {
-    showInfoToast(
-      mode === "login" ? "Login flow comes next." : "Signup flow comes next.",
-      "This screen is connected to the shared toast and session bootstrap infrastructure.",
-    );
+  const nextPath = useMemo(
+    () => resolvePostSignupRedirect(searchParams.get("next")),
+    [searchParams],
+  );
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (mode === "login") {
+      setFormError("Login will be enabled in the next auth step.");
+      return;
+    }
+
+    const normalizedValues = {
+      name: formValues.name.trim().replace(/\s+/g, " "),
+      email: formValues.email.trim().toLowerCase(),
+      password: formValues.password,
+    };
+
+    const validationErrors = validateSignupForm(normalizedValues);
+    setFieldErrors(validationErrors);
+    setFormError(null);
+
+    if (Object.keys(validationErrors).length > 0) {
+      return;
+    }
+
+    try {
+      const signupResponse = await signupMutation.mutateAsync(normalizedValues);
+
+      setSession({
+        user: signupResponse.user,
+        accessToken: signupResponse.accessToken,
+      });
+
+      showSuccessToast("Account created", "Your workspace is ready.");
+      router.replace(nextPath);
+    } catch (error) {
+      if (isApiClientError(error)) {
+        const nextFieldErrors = mapApiErrorDetailsToFormErrors(error.details);
+
+        if (Object.keys(nextFieldErrors).length > 0) {
+          setFieldErrors(nextFieldErrors);
+        }
+
+        setFormError(error.message);
+      } else {
+        setFormError("Unable to create your account right now.");
+      }
+
+      showApiErrorToast(error, "Unable to create your account right now.");
+    }
+  }
+
+  function handleInputChange<K extends keyof SignupFormValues>(
+    field: K,
+    value: SignupFormValues[K],
+  ) {
+    setFormValues((currentValues) => ({
+      ...currentValues,
+      [field]: value,
+    }));
+
+    setFieldErrors((currentErrors) => {
+      if (!currentErrors[field]) {
+        return currentErrors;
+      }
+
+      return {
+        ...currentErrors,
+        [field]: undefined,
+      };
+    });
+    setFormError(null);
   }
 
   return (
-    <main className="grid min-h-[calc(100vh-3.5rem)] lg:grid-cols-2">
-      {/* Left: Brand panel */}
-      <section className="hidden border-r border-border/60 bg-muted/30 p-8 lg:flex lg:flex-col lg:justify-between">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="grid size-8 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
+    <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,rgba(44,62,255,0.05),transparent_28%),linear-gradient(135deg,rgba(28,46,190,0.08),transparent_52%),var(--background)] px-4 py-6">
+      <section className="w-full max-w-md rounded-[8px] border border-border/70 bg-card px-5 py-7 shadow-[0_24px_80px_rgba(32,44,120,0.12)] sm:px-7 sm:py-8">
+        <div className="mb-7 space-y-4 text-center">
+          <div className="mx-auto flex w-fit items-center gap-2.5">
+            <div className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground">
               <Sparkles className="size-4" />
             </div>
-            <div>
+            <div className="text-left">
               <p className="text-sm font-semibold">Archon</p>
-              <p className="text-xs text-muted-foreground">Focused project delivery</p>
+              <p className="text-xs text-muted-foreground">Project delivery</p>
             </div>
           </div>
 
-          <div className="mt-8 space-y-3">
-            <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.26em] text-muted-foreground uppercase">
               {copy.eyebrow}
             </p>
-            <h1 className="max-w-md text-3xl font-bold leading-tight tracking-tight">
-              Keep the shell stable while the product grows feature by feature.
-            </h1>
-            <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
-              Sign in to the workspace scaffold, review project status, and move into the app
-              shell built for upcoming auth, projects, and Kanban work.
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          {featurePoints.map((point) => (
-            <div key={point} className="flex items-start gap-2.5 rounded-md bg-background/80 px-3 py-2">
-              <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-primary" />
-              <p className="text-sm text-muted-foreground">{point}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Right: Form panel */}
-      <section className="flex items-center justify-center px-4 py-8 sm:px-8">
-        <Card className="w-full max-w-md border-border/80 shadow-sm">
-          <CardHeader className="space-y-2 px-5 pt-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
-                  {copy.eyebrow}
-                </p>
-                <CardTitle className="mt-2 text-xl font-bold">{copy.title}</CardTitle>
-              </div>
-              <Link
-                href="/"
-                className="rounded-md border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                Home
-              </Link>
-            </div>
-            <CardDescription className="text-sm">{copy.description}</CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-4 px-5 pb-5">
-            <form className="space-y-3">
-              {mode === "signup" ? (
-                <label className="block space-y-1.5">
-                  <span className="text-sm font-medium">Full name</span>
-                  <Input placeholder="Jane Doe" />
-                </label>
-              ) : null}
-
-              <label className="block space-y-1.5">
-                <span className="text-sm font-medium">Email</span>
-                <Input placeholder="jane@example.com" type="email" />
-              </label>
-
-              <label className="block space-y-1.5">
-                <span className="text-sm font-medium">Password</span>
-                <Input placeholder="StrongPassword123" type="password" />
-              </label>
-
-              <div className="grid gap-2 pt-1 sm:grid-cols-[1fr_auto]">
-                <Button size="default" type="button" onClick={handlePlaceholderSubmit}>
-                  {copy.cta}
-                  <ArrowRight className="size-3.5" />
-                </Button>
-                <Button variant="outline" size="default" type="button">
-                  Continue with Google
-                </Button>
-              </div>
-            </form>
-
-            <div className="rounded-md border border-border/80 bg-muted/40 px-3 py-2.5">
-              <p className="text-xs font-medium">What is ready already?</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                Shared query provider, Axios client, request error normalization, session
-                bootstrap hooks, and global toast feedback are all wired.
-              </p>
-            </div>
-
-            <p className="text-sm text-muted-foreground">
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+              {copy.title}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.description}</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
               {copy.footerLabel}{" "}
-              <Link className="font-medium text-primary hover:underline" href={copy.footerHref}>
+              <Link className="font-semibold text-primary hover:underline" href={copy.footerHref}>
                 {copy.footerText}
               </Link>
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        <form className="space-y-3.5" onSubmit={handleSubmit}>
+          <Button
+            variant="outline"
+            type="button"
+            className="h-11 w-full justify-center rounded-[8px] border-border/80 bg-background text-foreground shadow-none"
+          >
+            <GoogleIcon className="size-4" />
+            Continue with Google
+          </Button>
+
+          <div className="flex items-center gap-3 py-1 text-xs uppercase">
+            <span className="h-px flex-1 bg-border/70" />
+            <span className="tracking-[0.22em] text-muted-foreground">Or</span>
+            <span className="h-px flex-1 bg-border/70" />
+          </div>
+
+          {mode === "signup" ? (
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium">Full name</span>
+              <Input
+                placeholder="Jane Doe"
+                className="h-11 rounded-[8px] border-border/80 bg-background px-4 shadow-none"
+                value={formValues.name}
+                onChange={(event) => handleInputChange("name", event.target.value)}
+              />
+              {fieldErrors.name ? (
+                <p className="text-xs text-destructive">{fieldErrors.name}</p>
+              ) : null}
+            </label>
+          ) : null}
+
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium">Email</span>
+            <Input
+              placeholder="jane@example.com"
+              type="email"
+              className="h-11 rounded-[8px] border-border/80 bg-background px-4 shadow-none"
+              value={formValues.email}
+              onChange={(event) => handleInputChange("email", event.target.value)}
+            />
+            {fieldErrors.email ? (
+              <p className="text-xs text-destructive">{fieldErrors.email}</p>
+            ) : null}
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium">Password</span>
+            <Input
+              placeholder="StrongPassword123"
+              type="password"
+              className="h-11 rounded-[8px] border-border/80 bg-background px-4 shadow-none"
+              value={formValues.password}
+              onChange={(event) => handleInputChange("password", event.target.value)}
+            />
+            {fieldErrors.password ? (
+              <p className="text-xs text-destructive">{fieldErrors.password}</p>
+            ) : null}
+          </label>
+
+          {mode === "signup" ? (
+            <div className="rounded-[8px] bg-muted/45 px-4 py-3">
+              <div className="mb-2 flex items-center gap-2">
+                <CheckCircle2 className="size-4 text-primary" />
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Ready already
+                </p>
+              </div>
+              <p className="text-xs leading-6 text-muted-foreground">
+                Shared query provider, Axios client, request error normalization, and session
+                bootstrap wiring are already in place.
+              </p>
+            </div>
+          ) : (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
+
+          {formError ? (
+            <div className="rounded-[8px] border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {formError}
+            </div>
+          ) : null}
+
+          <Button
+            size="lg"
+            type="submit"
+            disabled={signupMutation.isPending}
+            className={cn(
+              "mt-1.5 h-11 w-full rounded-[8px] text-sm font-semibold shadow-[0_12px_24px_rgba(53,64,209,0.22)]",
+              mode === "login" && "bg-primary hover:bg-primary/90",
+            )}
+          >
+            {signupMutation.isPending ? (
+              <>
+                <LoaderCircle className="size-4 animate-spin" />
+                Creating account
+              </>
+            ) : (
+              <>
+                {copy.cta}
+                <ArrowRight className="size-4" />
+              </>
+            )}
+          </Button>
+        </form>
       </section>
     </main>
   );
+}
+
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className={className}>
+      <path
+        fill="#4285F4"
+        d="M23.49 12.27c0-.79-.07-1.55-.2-2.27H12v4.29h6.45a5.52 5.52 0 0 1-2.4 3.62v3h3.89c2.28-2.1 3.55-5.2 3.55-8.64Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.89-3c-1.08.72-2.47 1.15-4.06 1.15-3.12 0-5.76-2.1-6.7-4.94H1.28v3.09A12 12 0 0 0 12 24Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.3 14.3A7.2 7.2 0 0 1 4.92 12c0-.8.14-1.58.38-2.3V6.62H1.28A12 12 0 0 0 0 12c0 1.94.46 3.77 1.28 5.38l4.02-3.08Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.77c1.76 0 3.34.6 4.58 1.78l3.43-3.43C17.96 1.12 15.24 0 12 0A12 12 0 0 0 1.28 6.62L5.3 9.7C6.24 6.86 8.88 4.77 12 4.77Z"
+      />
+    </svg>
+  );
+}
+
+function validateSignupForm(values: SignupFormValues): SignupFormErrors {
+  const errors: SignupFormErrors = {};
+
+  if (!values.name.trim()) {
+    errors.name = "Full name is required.";
+  }
+
+  if (!values.email.trim()) {
+    errors.email = "Email is required.";
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  if (!values.password) {
+    errors.password = "Password is required.";
+  } else if (values.password.length < 8) {
+    errors.password = "Password must be at least 8 characters.";
+  } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(values.password)) {
+    errors.password = "Password must include uppercase, lowercase, and a number.";
+  }
+
+  return errors;
+}
+
+function mapApiErrorDetailsToFormErrors(details: ApiErrorDetails | undefined) {
+  const nextErrors: SignupFormErrors = {};
+
+  if (!details) {
+    return nextErrors;
+  }
+
+  for (const field of ["name", "email", "password"] as const) {
+    const value = details[field];
+
+    if (Array.isArray(value) && value[0]) {
+      nextErrors[field] = value[0];
+    } else if (typeof value === "string" && value.length > 0) {
+      nextErrors[field] = value;
+    }
+  }
+
+  return nextErrors;
+}
+
+function resolvePostSignupRedirect(nextPath: string | null): Route {
+  if (!nextPath || !nextPath.startsWith("/") || nextPath.startsWith("//")) {
+    return "/app";
+  }
+
+  return nextPath as Route;
 }
