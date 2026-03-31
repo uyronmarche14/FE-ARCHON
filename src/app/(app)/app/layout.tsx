@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AppShellChrome } from "@/components/shared/app-shell-chrome";
+import { ProtectedAppShell } from "@/features/auth/components/protected-app-shell";
 
 type AppLayoutProps = {
   children: React.ReactNode;
@@ -14,5 +14,5 @@ export const metadata: Metadata = {
 };
 
 export default function AppLayout({ children }: AppLayoutProps) {
-  return <AppShellChrome>{children}</AppShellChrome>;
+  return <ProtectedAppShell>{children}</ProtectedAppShell>;
 }
