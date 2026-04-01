@@ -1,4 +1,4 @@
-import type { TaskStatus } from "@/contracts/tasks";
+import type { TaskGroups, TaskStatus } from "@/contracts/tasks";
 
 export type ProjectTaskCounts = Record<TaskStatus, number>;
 
@@ -14,6 +14,20 @@ export type ProjectSummary = {
 
 export type ProjectsListResponse = {
   items: ProjectSummary[];
+};
+
+export type ProjectMember = {
+  id: string;
+  name: string;
+  role: ProjectRole;
+};
+
+export type ProjectDetail = {
+  id: string;
+  name: string;
+  description: string | null;
+  members: ProjectMember[];
+  taskGroups: TaskGroups;
 };
 
 export type CreateProjectRequest = {

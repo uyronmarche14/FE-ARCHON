@@ -13,7 +13,7 @@ export type BoardMetric = {
   value: string;
 };
 
-const TASK_STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+export const TASK_STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
 
 const BOARD_LANE_CONTENT: Record<
   TaskStatus,
@@ -75,6 +75,46 @@ export function createBoardFilters(taskGroups: TaskGroups) {
   ];
 }
 
+export function insertTaskIntoGroups(
+  taskGroups: TaskGroups,
+  task: TaskCard,
+): TaskGroups {
+  const nextGroups = cloneTaskGroups(taskGroups);
+  nextGroups[task.status] = sortBoardTasks([...nextGroups[task.status], task]);
+
+  return nextGroups;
+}
+
+export function updateTaskInGroups(
+  taskGroups: TaskGroups,
+  task: TaskCard,
+): TaskGroups {
+  const nextGroups = createEmptyTaskGroups();
+
+  for (const status of TASK_STATUSES) {
+    const laneTasks = taskGroups[status].filter((laneTask) => laneTask.id !== task.id);
+
+    nextGroups[status] = laneTasks;
+  }
+
+  nextGroups[task.status] = sortBoardTasks([...nextGroups[task.status], task]);
+
+  return nextGroups;
+}
+
+export function removeTaskFromGroups(
+  taskGroups: TaskGroups,
+  taskId: string,
+): TaskGroups {
+  const nextGroups = createEmptyTaskGroups();
+
+  for (const status of TASK_STATUSES) {
+    nextGroups[status] = taskGroups[status].filter((task) => task.id !== taskId);
+  }
+
+  return nextGroups;
+}
+
 export function getBoardProjectName(
   projectId: string,
   projectSummary?: ProjectSummary | null,
@@ -129,6 +169,32 @@ export function formatTaskStatusLabel(status: TaskStatus) {
   }
 
   return "Todo";
+}
+
+function cloneTaskGroups(taskGroups: TaskGroups) {
+  return {
+    TODO: [...taskGroups.TODO],
+    IN_PROGRESS: [...taskGroups.IN_PROGRESS],
+    DONE: [...taskGroups.DONE],
+  };
+}
+
+function sortBoardTasks(tasks: TaskCard[]) {
+  return [...tasks].sort((left, right) => {
+    if (left.position !== null && right.position !== null) {
+      if (left.position !== right.position) {
+        return left.position - right.position;
+      }
+    } else if (left.position !== null) {
+      return -1;
+    } else if (right.position !== null) {
+      return 1;
+    }
+
+    return (
+      new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+    );
+  });
 }
 
 function getTotalTaskCount(taskGroups: TaskGroups) {

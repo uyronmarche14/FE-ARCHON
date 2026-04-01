@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpDown,
   CalendarClock,
@@ -12,41 +13,67 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import type { TaskCard, TaskStatus } from "@/contracts/tasks";
+import type { ProjectsListResponse } from "@/contracts/projects";
+import type {
+  CreateTaskRequest,
+  ProjectTasksResponse,
+  TaskCard,
+  TaskStatus,
+  UpdateTaskRequest,
+} from "@/contracts/tasks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProjects } from "@/features/projects/hooks/use-projects";
-import { TaskPreviewPanel } from "@/features/tasks/components/task-preview-panel";
+import { projectsQueryKey } from "@/features/projects/lib/project-query-keys";
+import { TaskCard as BoardTaskCard } from "@/features/tasks/components/task-card";
+import { TaskDrawer } from "@/features/tasks/components/task-drawer";
+import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
+import { useDeleteTask } from "@/features/tasks/hooks/use-delete-task";
 import { useProjectTasks } from "@/features/tasks/hooks/use-project-tasks";
+import { useUpdateTask } from "@/features/tasks/hooks/use-update-task";
 import {
   createBoardFilters,
   createBoardLanes,
   createBoardMetrics,
   createEmptyTaskGroups,
   flattenTaskGroups,
-  formatTaskStatusLabel,
   getBoardProjectDescription,
   getBoardProjectName,
-  getTaskAssigneeInitials,
-  getTaskAssigneeLabel,
-  getTaskDueLabel,
-  getTaskPositionLabel,
-  getTaskUpdatedLabel,
+  insertTaskIntoGroups,
+  removeTaskFromGroups,
+  updateTaskInGroups,
 } from "@/features/tasks/lib/task-board";
+import { projectTasksQueryKey } from "@/features/tasks/lib/task-query-keys";
+import { showSuccessToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 type ProjectBoardShellProps = {
   projectId: string;
 };
 
+type TaskDrawerState =
+  | {
+      mode: "create";
+      initialStatus: TaskStatus;
+      taskId: null;
+    }
+  | {
+      mode: "edit" | "view";
+      initialStatus: TaskStatus;
+      taskId: string;
+    };
+
 export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
+  const queryClient = useQueryClient();
   const projectsQuery = useProjects();
   const tasksQuery = useProjectTasks(projectId);
-  const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
+  const createTaskMutation = useCreateTask(projectId);
+  const updateTaskMutation = useUpdateTask();
+  const deleteTaskMutation = useDeleteTask();
+  const [drawerState, setDrawerState] = useState<TaskDrawerState | null>(null);
 
   const currentProject =
     projectsQuery.data?.items.find((project) => project.id === projectId) ?? null;
@@ -57,7 +84,28 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
   const lanes = useMemo(() => createBoardLanes(taskGroups), [taskGroups]);
   const metrics = useMemo(() => createBoardMetrics(taskGroups), [taskGroups]);
   const boardFilters = useMemo(() => createBoardFilters(taskGroups), [taskGroups]);
-  const previewTask = tasks.find((task) => task.id === previewTaskId) ?? null;
+  const selectedTask =
+    drawerState?.taskId !== null && drawerState?.taskId !== undefined
+      ? tasks.find((task) => task.id === drawerState.taskId) ?? null
+      : null;
+  const drawerMode = drawerState?.mode ?? "view";
+  const drawerInitialStatus =
+    drawerState?.mode === "create"
+      ? drawerState.initialStatus
+      : selectedTask?.status ?? "TODO";
+  const isDrawerOpen =
+    drawerState !== null &&
+    (drawerState.mode === "create" || selectedTask !== null);
+  const drawerStateKey =
+    drawerState === null
+      ? "closed"
+      : drawerState.mode === "create"
+        ? `create:${drawerState.initialStatus}`
+        : `${drawerState.mode}:${drawerState.taskId}:${selectedTask?.updatedAt ?? "missing"}`;
+  const isTaskMutationPending =
+    createTaskMutation.isPending ||
+    updateTaskMutation.isPending ||
+    deleteTaskMutation.isPending;
 
   if (tasksQuery.isPending) {
     return <ProjectBoardLoadingState projectName={projectName} />;
@@ -73,6 +121,120 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
         }}
       />
     );
+  }
+
+  async function handleCreateTask(request: CreateTaskRequest) {
+    const createdTask = await createTaskMutation.mutateAsync(request);
+
+    queryClient.setQueryData<ProjectTasksResponse>(
+      projectTasksQueryKey(projectId),
+      (currentTaskResponse) => ({
+        taskGroups: insertTaskIntoGroups(
+          currentTaskResponse?.taskGroups ?? createEmptyTaskGroups(),
+          createdTask,
+        ),
+      }),
+    );
+    queryClient.setQueryData<ProjectsListResponse>(
+      projectsQueryKey,
+      (currentProjects) =>
+        currentProjects
+          ? {
+              items: currentProjects.items.map((project) =>
+                project.id === projectId
+                  ? {
+                      ...project,
+                      taskCounts: {
+                        ...project.taskCounts,
+                        [createdTask.status]: project.taskCounts[createdTask.status] + 1,
+                      },
+                    }
+                  : project,
+              ),
+            }
+          : currentProjects,
+    );
+
+    setDrawerState(null);
+    showSuccessToast("Task created", "The new card is ready on the board.");
+
+    void queryClient.invalidateQueries({
+      queryKey: projectTasksQueryKey(projectId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: projectsQueryKey,
+    });
+  }
+
+  async function handleUpdateTask(task: TaskCard, request: UpdateTaskRequest) {
+    const updatedTask = await updateTaskMutation.mutateAsync({
+      taskId: task.id,
+      request,
+    });
+
+    queryClient.setQueryData<ProjectTasksResponse>(
+      projectTasksQueryKey(projectId),
+      (currentTaskResponse) => ({
+        taskGroups: updateTaskInGroups(
+          currentTaskResponse?.taskGroups ?? createEmptyTaskGroups(),
+          updatedTask,
+        ),
+      }),
+    );
+
+    setDrawerState({
+      mode: "view",
+      taskId: updatedTask.id,
+      initialStatus: updatedTask.status,
+    });
+    showSuccessToast("Task updated", "Changes were saved without leaving the board.");
+
+    void queryClient.invalidateQueries({
+      queryKey: projectTasksQueryKey(projectId),
+    });
+  }
+
+  async function handleDeleteTask(task: TaskCard) {
+    await deleteTaskMutation.mutateAsync(task.id);
+
+    queryClient.setQueryData<ProjectTasksResponse>(
+      projectTasksQueryKey(projectId),
+      (currentTaskResponse) => ({
+        taskGroups: removeTaskFromGroups(
+          currentTaskResponse?.taskGroups ?? createEmptyTaskGroups(),
+          task.id,
+        ),
+      }),
+    );
+    queryClient.setQueryData<ProjectsListResponse>(
+      projectsQueryKey,
+      (currentProjects) =>
+        currentProjects
+          ? {
+              items: currentProjects.items.map((project) =>
+                project.id === projectId
+                  ? {
+                      ...project,
+                      taskCounts: {
+                        ...project.taskCounts,
+                        [task.status]: Math.max(0, project.taskCounts[task.status] - 1),
+                      },
+                    }
+                  : project,
+              ),
+            }
+          : currentProjects,
+    );
+
+    setDrawerState(null);
+    showSuccessToast("Task deleted", "The card was removed from the board.");
+
+    void queryClient.invalidateQueries({
+      queryKey: projectTasksQueryKey(projectId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: projectsQueryKey,
+    });
   }
 
   return (
@@ -100,7 +262,18 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
               </div>
             </div>
 
-            <Button type="button" size="sm" className="rounded-lg">
+            <Button
+              type="button"
+              size="sm"
+              className="rounded-lg"
+              onClick={() =>
+                setDrawerState({
+                  mode: "create",
+                  taskId: null,
+                  initialStatus: "TODO",
+                })
+              }
+            >
               <Plus className="size-4" />
               Create task
             </Button>
@@ -246,6 +419,13 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
                       size="icon-xs"
                       className="rounded-md text-muted-foreground"
                       aria-label={`Add task to ${lane.title}`}
+                      onClick={() =>
+                        setDrawerState({
+                          mode: "create",
+                          taskId: null,
+                          initialStatus: lane.status,
+                        })
+                      }
                     >
                       <Plus className="size-3.5" />
                     </Button>
@@ -271,7 +451,13 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
                       key={task.id}
                       type="button"
                       className="rounded-lg border border-border/70 bg-background px-3 py-3 text-left shadow-none transition-[border-color,background] duration-150 hover:border-primary/15 hover:bg-surface-subtle/40"
-                      onClick={() => setPreviewTaskId(task.id)}
+                      onClick={() =>
+                        setDrawerState({
+                          mode: "view",
+                          taskId: task.id,
+                          initialStatus: task.status,
+                        })
+                      }
                     >
                       <BoardTaskCard task={task} />
                     </button>
@@ -283,20 +469,36 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
         </div>
       </ScrollArea>
 
-      <Sheet
-        open={Boolean(previewTask)}
+      <TaskDrawer
+        key={drawerStateKey}
+        open={isDrawerOpen}
+        mode={drawerMode}
+        projectId={projectId}
+        task={selectedTask}
+        initialStatus={drawerInitialStatus}
+        isCreatePending={createTaskMutation.isPending}
+        isUpdatePending={updateTaskMutation.isPending}
+        isDeletePending={deleteTaskMutation.isPending}
         onOpenChange={(open) => {
-          if (!open) {
-            setPreviewTaskId(null);
+          if (!open && !isTaskMutationPending) {
+            setDrawerState(null);
           }
         }}
-      >
-        <SheetContent className="overflow-y-auto sm:max-w-xl">
-          {previewTask ? (
-            <TaskPreviewPanel task={previewTask} presentation="sheet" />
-          ) : null}
-        </SheetContent>
-      </Sheet>
+        onModeChange={(mode) => {
+          if (!selectedTask) {
+            return;
+          }
+
+          setDrawerState({
+            mode,
+            taskId: selectedTask.id,
+            initialStatus: selectedTask.status,
+          });
+        }}
+        onCreate={handleCreateTask}
+        onUpdate={handleUpdateTask}
+        onDelete={handleDeleteTask}
+      />
     </section>
   );
 }
@@ -413,66 +615,6 @@ function LaneEmptyState({ lane }: { lane: string }) {
       </p>
     </div>
   );
-}
-
-function BoardTaskCard({ task }: { task: TaskCard }) {
-  return (
-    <>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={getLaneBadgeVariant(task.status)}>
-              {formatTaskStatusLabel(task.status)}
-            </Badge>
-            <Badge variant="outline">{getTaskDueLabel(task.dueDate)}</Badge>
-          </div>
-
-          <h4 className="mt-2 text-sm font-semibold leading-snug text-foreground">
-            {task.title}
-          </h4>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            {task.description ?? "No description available yet."}
-          </p>
-        </div>
-
-        <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-[11px] font-semibold text-primary">
-          {getTaskAssigneeInitials(task.assigneeId)}
-        </div>
-      </div>
-
-      <div className="mt-3 rounded-lg border border-border/60 bg-surface-subtle/70 px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2 text-[11px]">
-          <span className="text-muted-foreground">Assignee</span>
-          <span className="font-medium text-foreground">
-            {getTaskAssigneeLabel(task.assigneeId)}
-          </span>
-        </div>
-        <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px]">
-          <span className="text-muted-foreground">Updated</span>
-          <span className="font-medium text-foreground">
-            {getTaskUpdatedLabel(task.updatedAt)}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span>{getTaskPositionLabel(task.position, task.status)}</span>
-        <span className="font-medium text-foreground/80">Open preview</span>
-      </div>
-    </>
-  );
-}
-
-function getLaneBadgeVariant(status: TaskStatus) {
-  if (status === "IN_PROGRESS") {
-    return "progress" as const;
-  }
-
-  if (status === "DONE") {
-    return "done" as const;
-  }
-
-  return "todo" as const;
 }
 
 function getLaneDotClassName(status: TaskStatus) {

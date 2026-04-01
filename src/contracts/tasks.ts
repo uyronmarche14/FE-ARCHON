@@ -18,3 +18,22 @@ export type TaskGroups = Record<TaskStatus, TaskCard[]>;
 export type ProjectTasksResponse = {
   taskGroups: TaskGroups;
 };
+
+export type CreateTaskRequest = {
+  title: string;
+  description?: string;
+  status?: TaskStatus;
+  assigneeId?: string;
+  dueDate?: string;
+};
+
+export type UpdateTaskRequest = {
+  title?: string;
+  description?: string | null;
+  assigneeId?: string | null;
+  dueDate?: string | null;
+};
+
+export type DeleteTaskResponse = {
+  message: string;
+};
