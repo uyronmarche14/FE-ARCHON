@@ -2,61 +2,78 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Bell,
-  CalendarRange,
-  ChevronRight,
-  LayoutDashboard,
-  Menu,
-  PanelLeftClose,
-  Search,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { Bell, LayoutDashboard, Plus, Search } from "lucide-react";
+import { AccountMenu } from "@/components/shared/account-menu";
 import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
 import { useLogout } from "@/features/auth/hooks/use-logout";
-import { Badge } from "@/components/ui/badge";
+import { useProjects } from "@/features/projects/hooks/use-projects";
 import { Button } from "@/components/ui/button";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { CreateProjectDialog } from "@/features/projects/components/create-project-dialog";
+import { useActiveWorkspaceLabel } from "@/features/projects/hooks/use-active-workspace-label";
+import {
+  getProjectIdFromPathname,
+  getProjectPath,
+} from "@/features/projects/lib/project-paths";
+import { getProjectInitials } from "@/features/projects/lib/project-summary";
 import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 
 type AppShellChromeProps = {
   children: React.ReactNode;
 };
 
-const navigation = [
-  {
-    href: "/app" as Route,
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    description: "Project overview",
-  },
-  {
-    href: "/app/projects/launch-planning" as Route,
-    label: "Launch planning",
-    icon: Sparkles,
-    description: "Primary board",
-  },
-  {
-    href: "/app/projects/qa-readiness" as Route,
-    label: "QA readiness",
-    icon: CalendarRange,
-    description: "Validation runway",
-  },
-] as const;
-
 export function AppShellChrome({ children }: AppShellChromeProps) {
+  return (
+    <TooltipProvider>
+      <SidebarProvider>
+        <AppShellChromeLayout>{children}</AppShellChromeLayout>
+      </SidebarProvider>
+    </TooltipProvider>
+  );
+}
+
+function AppShellChromeLayout({ children }: AppShellChromeProps) {
   const router = useRouter();
   const pathname = usePathname();
   const logoutMutation = useLogout();
   const { clearSession, session, status } = useAuthSession();
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  const activeLabel = useMemo(() => {
-    const match = navigation.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
-    return match?.label ?? "Workspace";
-  }, [pathname]);
+  const projectsQuery = useProjects();
+  const { closeMobileSidebar } = useSidebar();
+  const activeLabel = useActiveWorkspaceLabel(pathname);
+  const sessionName = session?.user.name ?? "Workspace visitor";
+  const sessionEmail = session?.user.email ?? "Authentication required";
+  const sessionInitials = getInitials(sessionName);
+  const currentProjectId = getProjectIdFromPathname(pathname);
+  const currentProject = currentProjectId
+    ? (projectsQuery.data?.items.find((project) => project.id === currentProjectId) ?? null)
+    : null;
+  const currentProjectHref = currentProjectId
+    ? (getProjectPath(currentProjectId) as Route)
+    : null;
+  const isCurrentProjectActive = currentProjectHref
+    ? pathname === currentProjectHref || pathname.startsWith(`${currentProjectHref}/`)
+    : false;
 
   async function handleLogout() {
     try {
@@ -73,164 +90,200 @@ export function AppShellChrome({ children }: AppShellChromeProps) {
     }
   }
 
-  const sidebarContent = (
-    <div className="flex h-full flex-col">
-      {/* Logo */}
-      <div className="border-b border-sidebar-border/80 px-3 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="grid size-8 place-items-center rounded-md bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground">
-            A
-          </div>
-          <div>
-            <p className="text-sm font-semibold leading-none tracking-tight">Archon</p>
-            <p className="text-xs text-muted-foreground">Execution workspace</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Nav items */}
-      <div className="px-2 py-3">
-        <p className="px-2 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
-          Navigation
-        </p>
-        <nav className="mt-2 space-y-0.5">
-          {navigation.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            const Icon = item.icon;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={[
-                  "flex items-center justify-between rounded-md px-2 py-2 transition-colors",
-                  active
-                    ? "bg-sidebar-primary/10 text-foreground"
-                    : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
-                ].join(" ")}
-                onClick={() => setMobileNavOpen(false)}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className={[
-                      "grid size-7 place-items-center rounded-md border",
-                      active
-                        ? "border-primary/20 bg-primary/10 text-primary"
-                        : "border-border/80 bg-background text-muted-foreground",
-                    ].join(" ")}
-                  >
-                    <Icon className="size-3.5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium leading-none">{item.label}</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">{item.description}</p>
-                  </div>
-                </div>
-                <ChevronRight className="size-3.5 opacity-50" />
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Session card */}
-      <div className="mt-auto px-2 pb-3">
-        <div className="rounded-md border border-border/80 bg-background/90 p-3">
-          <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
-            Session
-          </p>
-          <p className="mt-2 text-sm font-medium leading-none">
-            {session?.user.name ?? "Workspace visitor"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {session?.user.email ?? "Authentication required"}
-          </p>
-          <div className="mt-2">
-            <Badge variant={status === "authenticated" ? "success" : "muted"}>
-              {status}
-            </Badge>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="flex min-h-screen bg-background">
-      {/* Desktop sidebar */}
-      <aside className="hidden w-60 shrink-0 border-r border-sidebar-border/80 bg-sidebar lg:block">
-        {sidebarContent}
-      </aside>
-
-      {/* Mobile nav overlay */}
-      {mobileNavOpen ? (
-        <div className="fixed inset-0 z-50 bg-foreground/20 backdrop-blur-sm lg:hidden">
-          <div className="h-full w-[80%] max-w-xs border-r border-border bg-sidebar shadow-xl">
-            <div className="flex items-center justify-between border-b border-sidebar-border/80 px-3 py-3">
-              <p className="text-sm font-medium">Navigation</p>
-              <Button
-                size="icon-xs"
-                variant="ghost"
-                onClick={() => setMobileNavOpen(false)}
-              >
-                <X className="size-3.5" />
-              </Button>
-            </div>
-            {sidebarContent}
+    <div className="flex min-h-screen bg-shell-inset">
+      <Sidebar>
+        <SidebarHeader className="space-y-4">
+          <div className="flex items-center group-data-[state=collapsed]/sidebar:justify-center">
+            <AccountMenu
+              email={sessionEmail}
+              initials={sessionInitials}
+              logoutPending={logoutMutation.isPending}
+              name={sessionName}
+              onLogout={handleLogout}
+              status={status}
+              variant="sidebar"
+            />
           </div>
-        </div>
-      ) : null}
+          <div className="group-data-[state=collapsed]/sidebar:hidden">
+            <CreateProjectDialog
+              trigger={
+                <Button
+                  size="default"
+                  className="w-full justify-start rounded-xl font-semibold shadow-none"
+                >
+                  <Plus className="mr-2 size-4" />
+                  Create project
+                </Button>
+              }
+            />
+          </div>
+          <div className="hidden group-data-[state=collapsed]/sidebar:flex justify-center">
+            <CreateProjectDialog
+              trigger={
+                <Button
+                  size="icon"
+                  className="rounded-xl shadow-none"
+                  aria-label="Create project"
+                >
+                  <Plus className="size-4" />
+                </Button>
+              }
+            />
+          </div>
+        </SidebarHeader>
 
-      {/* Main content area */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 border-b border-border/80 bg-background/95 px-4 py-2.5 backdrop-blur-sm sm:px-5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <Button
-                size="icon-xs"
-                variant="outline"
-                className="lg:hidden"
-                onClick={() => setMobileNavOpen(true)}
-              >
-                <Menu className="size-3.5" />
-              </Button>
-              <Button
-                size="icon-xs"
-                variant="outline"
-                className="hidden lg:inline-flex"
-              >
-                <PanelLeftClose className="size-3.5" />
-              </Button>
-              <div>
-                <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
-                  Workspace
+        <SidebarContent className="gap-3 group-data-[state=collapsed]/sidebar:gap-2">
+          <SidebarGroup>
+            <SidebarGroupLabel>Pages</SidebarGroupLabel>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === "/app"}
+                  tooltip="Dashboard"
+                >
+                  <Link
+                    href={"/app" as Route}
+                    aria-current={pathname === "/app" ? "page" : undefined}
+                    onClick={closeMobileSidebar}
+                  >
+                    <LayoutDashboard className="size-4" />
+                    <span className="min-w-0 flex-1 truncate group-data-[state=collapsed]/sidebar:hidden">
+                      Dashboard
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {currentProjectHref ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isCurrentProjectActive}
+                    tooltip={currentProject?.name ?? "Current project"}
+                  >
+                    <Link
+                      href={currentProjectHref}
+                      aria-current={isCurrentProjectActive ? "page" : undefined}
+                      onClick={closeMobileSidebar}
+                    >
+                      <div
+                        aria-hidden="true"
+                        className={cn(
+                          "grid size-5 place-items-center rounded-md border text-[10px] font-semibold group-data-[state=collapsed]/sidebar:size-5",
+                          isCurrentProjectActive
+                            ? "border-transparent bg-transparent text-secondary-foreground"
+                            : "border-border bg-background text-muted-foreground",
+                        )}
+                      >
+                        {currentProject ? getProjectInitials(currentProject.name) : "PJ"}
+                      </div>
+                      <span className="min-w-0 flex-1 truncate group-data-[state=collapsed]/sidebar:hidden">
+                        {currentProject?.name ?? "Current project"}
+                      </span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
+            </SidebarMenu>
+          </SidebarGroup>
+        </SidebarContent>
+
+
+      </Sidebar>
+
+      <SidebarInset>
+        <header className="sticky top-0 z-20 bg-muted/30 px-4 pt-4 pb-4 backdrop-blur-md sm:px-6 sm:py-5 border-b border-border/40">
+          <div className="flex items-center justify-between">
+            <div className="flex flitems-center gap-3 min-w-0">
+              <SidebarTrigger />
+              <div className="min-w-0 pl-1 flex flex-row items-center">
+                <p className="text-[14px] font-semibold  text-muted-foreground uppercase">
+                  Workspace <span className="font-bold">{activeLabel}</span>
                 </p>
-                <h1 className="text-lg font-semibold leading-tight tracking-tight">{activeLabel}</h1>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="hidden items-center gap-1.5 rounded-md border border-border/80 bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground sm:flex">
-                <Search className="size-3.5" />
-                <span>Search projects, tasks…</span>
+            <div className="flex items-center gap-2.5 sm:gap-4">
+              <div className="hidden md:flex">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="min-w-[16rem] justify-between rounded-md bg-background border-border/80 text-muted-foreground shadow-sm xl:min-w-[20rem] hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="flex items-center gap-2 text-[13px]">
+                        <Search className="size-4" />
+                        Search projects...
+                      </span>
+                      <span className="rounded-md border border-border/50 bg-muted/50 px-1.5 py-0.5 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+                        Cmd K
+                      </span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Search is visual-only in this pass.</TooltipContent>
+                </Tooltip>
               </div>
-              <Button size="icon-xs" variant="outline">
-                <Bell className="size-3.5" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                disabled={logoutMutation.isPending}
-              >
-                {logoutMutation.isPending ? "Logging out" : "Log out"}
-              </Button>
+
+
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="rounded-md bg-background shadow-sm border-border/80 text-muted-foreground md:hidden size-9"
+                    aria-label="Search workspace"
+                  >
+                    <Search className="size-[1.1rem]" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Search is visual-only in this pass.</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="rounded-md bg-background shadow-sm border-border/80 text-muted-foreground size-8"
+                    aria-label="Notifications"
+                  >
+                    <Bell className="size-[1rem]" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Notifications are visual-only in this pass.</TooltipContent>
+              </Tooltip>
+
+              <div className="md:hidden">
+                <AccountMenu
+                  email={sessionEmail}
+                  initials={sessionInitials}
+                  logoutPending={logoutMutation.isPending}
+                  name={sessionName}
+                  onLogout={handleLogout}
+                  status={status}
+                  variant="navbar"
+                />
+              </div>
             </div>
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-4 sm:px-5 sm:py-5">{children}</main>
-      </div>
+        <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+      </SidebarInset>
     </div>
   );
+}
+
+function getInitials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((segment) => segment[0]?.toUpperCase() ?? "")
+    .join("") || "WS";
 }
