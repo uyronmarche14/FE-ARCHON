@@ -152,12 +152,12 @@ export function TaskDrawer({
         onOpenChange(nextOpen);
       }}
     >
-      <SheetContent className="w-[calc(100vw-2rem)] max-w-none overflow-y-auto md:w-[40vw]">
+      <SheetContent className="w-[calc(100vw-1rem)] max-w-none overflow-y-auto px-4 py-4 sm:w-[calc(100vw-2rem)] sm:px-5 sm:py-5 md:w-[40vw]">
         {mode === "create" ? (
           <>
-            <SheetHeader>
+            <SheetHeader className="gap-3 border-b border-border/60 pb-4">
               <Badge variant="outline" className="w-fit bg-background">
-                Task create
+                New task
               </Badge>
               <SheetTitle>Create task</SheetTitle>
               <SheetDescription>
@@ -189,9 +189,9 @@ export function TaskDrawer({
 
         {mode === "edit" && task ? (
           <>
-            <SheetHeader>
+            <SheetHeader className="gap-3 border-b border-border/60 pb-4">
               <Badge variant="outline" className="w-fit bg-background">
-                Task edit
+                Editing
               </Badge>
               <SheetTitle>Edit task</SheetTitle>
               <SheetDescription>
@@ -227,7 +227,7 @@ export function TaskDrawer({
             <TaskPreviewPanel task={task} presentation="sheet" />
 
             {confirmDelete ? (
-              <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-4">
+              <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
                   <div className="space-y-1">
@@ -243,7 +243,7 @@ export function TaskDrawer({
               </div>
             ) : null}
 
-            <SheetFooter>
+            <SheetFooter className="border-t border-border/60 pt-4">
               {confirmDelete ? (
                 <>
                   <Button

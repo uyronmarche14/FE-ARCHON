@@ -53,17 +53,22 @@ export function TaskForm({
   onValueChange,
 }: TaskFormProps) {
   return (
-    <form className="mt-4 grid gap-4" onSubmit={onSubmit}>
+    <form className="mt-5 grid gap-5" onSubmit={onSubmit}>
       {mode === "create" ? (
-        <div className="space-y-2">
-          <Label>Initial lane</Label>
+        <section className="space-y-3 rounded-lg border border-border/70 bg-surface-subtle/55 px-4 py-4">
+          <div className="space-y-1">
+            <Label>Initial lane</Label>
+            <p className="text-xs text-muted-foreground">
+              Choose where the new task should land first.
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2">
             {TASK_STATUSES.map((status) => (
               <button
                 key={status}
                 type="button"
                 className={cn(
-                  "inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+                  "inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                   values.status === status
                     ? "border-primary/30 bg-primary/10 text-primary"
                     : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -77,32 +82,37 @@ export function TaskForm({
               </button>
             ))}
           </div>
-        </div>
+        </section>
       ) : null}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="task-title">Task title</Label>
-        <Input
-          id="task-title"
-          value={values.title}
-          placeholder="Finalize launch checklist"
-          aria-invalid={errors.title ? true : undefined}
-          disabled={isPending}
-          onChange={(event) => onValueChange("title", event.target.value)}
-        />
-        {errors.title ? (
-          <p className="text-xs text-destructive">{errors.title}</p>
-        ) : null}
-      </div>
+      <section className="grid gap-4 rounded-lg border border-border/70 bg-card px-4 py-4 shadow-sm">
+        <div className="space-y-1.5">
+          <Label htmlFor="task-title">Task title</Label>
+          <Input
+            id="task-title"
+            value={values.title}
+            placeholder="Finalize launch checklist"
+            aria-invalid={errors.title ? true : undefined}
+            disabled={isPending}
+            onChange={(event) => onValueChange("title", event.target.value)}
+          />
+          {errors.title ? (
+            <p className="text-xs text-destructive">{errors.title}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Keep it specific enough to scan quickly on the board.
+            </p>
+          )}
+        </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="task-description">Description</Label>
-        <Textarea
-          id="task-description"
-          value={values.description}
-          placeholder="Capture the work, context, and next check needed."
-          aria-invalid={errors.description ? true : undefined}
-          disabled={isPending}
+        <div className="space-y-1.5">
+          <Label htmlFor="task-description">Description</Label>
+          <Textarea
+            id="task-description"
+            value={values.description}
+            placeholder="Capture the work, context, and next check needed."
+            aria-invalid={errors.description ? true : undefined}
+            disabled={isPending}
           onChange={(event) => onValueChange("description", event.target.value)}
         />
         {errors.description ? (
@@ -113,8 +123,9 @@ export function TaskForm({
           </p>
         )}
       </div>
+      </section>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <section className="grid gap-4 rounded-lg border border-border/70 bg-card px-4 py-4 shadow-sm sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="task-assignee">Assignee</Label>
           <Select
@@ -162,15 +173,15 @@ export function TaskForm({
             </p>
           )}
         </div>
-      </div>
+      </section>
 
       {formError ? (
-        <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           {formError}
         </div>
       ) : null}
 
-      <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+      <div className="flex flex-col-reverse gap-2 border-t border-border/60 pt-4 sm:flex-row sm:justify-end">
         <Button
           type="button"
           variant="outline"

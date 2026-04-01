@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
 import type { TaskCard as TaskCardData } from "@/contracts/tasks";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
   formatTaskStatusLabel,
   getTaskAssigneeInitials,
@@ -10,54 +12,95 @@ import {
 } from "@/features/tasks/lib/task-board";
 
 type TaskCardProps = {
+  dragHandle?: ReactNode;
+  isDragging?: boolean;
+  onOpen?: () => void;
   task: TaskCardData;
 };
 
-export function TaskCard({ task }: TaskCardProps) {
+export function TaskCard({
+  dragHandle,
+  isDragging = false,
+  onOpen,
+  task,
+}: TaskCardProps) {
   return (
-    <>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={getLaneBadgeVariant(task.status)}>
-              {formatTaskStatusLabel(task.status)}
-            </Badge>
-            <Badge variant="outline">{getTaskDueLabel(task.dueDate)}</Badge>
+    <article
+      className={cn(
+        "grid cursor-grab gap-3 rounded-lg border border-border/70 bg-background px-3 py-3 shadow-sm transition-[transform,border-color,box-shadow,background-color,opacity] duration-150 hover:border-primary/20 hover:bg-card hover:shadow-sm active:cursor-grabbing",
+        isDragging && "border-primary/30 bg-card opacity-75 shadow-lg",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            className="block w-full min-w-0 space-y-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            onClick={onOpen}
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant={getLaneBadgeVariant(task.status)}>
+                {formatTaskStatusLabel(task.status)}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="font-medium normal-case tracking-normal"
+              >
+                {getTaskDueLabel(task.dueDate)}
+              </Badge>
+            </div>
+
+            <div className="space-y-1">
+              <h4 className="text-sm font-semibold leading-5 text-foreground">
+                {task.title}
+              </h4>
+              <p className="line-clamp-2 text-[13px] leading-5 text-muted-foreground">
+                {task.description ?? "No description available yet."}
+              </p>
+            </div>
+          </button>
+        </div>
+
+        <div className="flex shrink-0 items-start gap-2">
+          {dragHandle}
+          <div className="grid size-8 place-items-center rounded-md border border-border/70 bg-surface-subtle text-[11px] font-semibold text-foreground">
+            {getTaskAssigneeInitials(task.assigneeId)}
           </div>
-
-          <h4 className="mt-2 text-sm font-semibold leading-snug text-foreground">
-            {task.title}
-          </h4>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            {task.description ?? "No description available yet."}
-          </p>
-        </div>
-
-        <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-[11px] font-semibold text-primary">
-          {getTaskAssigneeInitials(task.assigneeId)}
         </div>
       </div>
 
-      <div className="mt-3 rounded-lg border border-border/60 bg-surface-subtle/70 px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2 text-[11px]">
-          <span className="text-muted-foreground">Assignee</span>
-          <span className="font-medium text-foreground">
-            {getTaskAssigneeLabel(task.assigneeId)}
-          </span>
-        </div>
-        <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px]">
-          <span className="text-muted-foreground">Updated</span>
-          <span className="font-medium text-foreground">
-            {getTaskUpdatedLabel(task.updatedAt)}
-          </span>
-        </div>
+      <div className="grid gap-2 rounded-md border border-border/60 bg-surface-subtle/55 px-3 py-2.5">
+        <TaskMetaRow label="Assignee" value={getTaskAssigneeLabel(task.assigneeId)} />
+        <TaskMetaRow label="Recent activity" value={getTaskUpdatedLabel(task.updatedAt)} />
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span>{getTaskPositionLabel(task.position, task.status)}</span>
-        <span className="font-medium text-foreground/80">Open preview</span>
+      <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-2 text-[11px]">
+        <span className="truncate text-muted-foreground">
+          {getTaskPositionLabel(task.position, task.status)}
+        </span>
+        <button
+          type="button"
+          className="shrink-0 font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          onClick={onOpen}
+        >
+          Open details
+        </button>
       </div>
-    </>
+    </article>
+  );
+}
+
+type TaskMetaRowProps = {
+  label: string;
+  value: string;
+};
+
+export function TaskMetaRow({ label, value }: TaskMetaRowProps) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-[11px]">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="truncate font-medium text-foreground">{value}</span>
+    </div>
   );
 }
 

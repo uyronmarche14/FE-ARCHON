@@ -34,6 +34,11 @@ export type UpdateTaskRequest = {
   dueDate?: string | null;
 };
 
+export type UpdateTaskStatusRequest = {
+  status: TaskStatus;
+  position?: number | null;
+};
+
 export type DeleteTaskResponse = {
   message: string;
 };

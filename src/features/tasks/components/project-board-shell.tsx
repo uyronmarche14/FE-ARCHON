@@ -1,6 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import {
+  closestCorners,
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpDown,
@@ -9,7 +20,6 @@ import {
   CircleCheckBig,
   Filter,
   LayoutGrid,
-  MoreHorizontal,
   Plus,
   Search,
 } from "lucide-react";
@@ -20,21 +30,29 @@ import type {
   TaskCard,
   TaskStatus,
   UpdateTaskRequest,
+  UpdateTaskStatusRequest,
 } from "@/contracts/tasks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useProjects } from "@/features/projects/hooks/use-projects";
-import { projectsQueryKey } from "@/features/projects/lib/project-query-keys";
+import { getLaneDotClassName } from "@/features/tasks/components/board-column";
+import { BoardContainer } from "@/features/tasks/components/board-container";
+import { KanbanBoardLane } from "@/features/tasks/components/kanban-board-lane";
 import { TaskCard as BoardTaskCard } from "@/features/tasks/components/task-card";
 import { TaskDrawer } from "@/features/tasks/components/task-drawer";
+import { useProjects } from "@/features/projects/hooks/use-projects";
+import {
+  projectDetailQueryKey,
+  projectsQueryKey,
+} from "@/features/projects/lib/project-query-keys";
 import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
 import { useDeleteTask } from "@/features/tasks/hooks/use-delete-task";
 import { useProjectTasks } from "@/features/tasks/hooks/use-project-tasks";
 import { useUpdateTask } from "@/features/tasks/hooks/use-update-task";
+import { useUpdateTaskStatus } from "@/features/tasks/hooks/use-update-task-status";
 import {
+  applyTaskStatusChangeToProjectsList,
   createBoardFilters,
   createBoardLanes,
   createBoardMetrics,
@@ -43,11 +61,13 @@ import {
   getBoardProjectDescription,
   getBoardProjectName,
   insertTaskIntoGroups,
+  moveTaskToStatus,
   removeTaskFromGroups,
+  TASK_STATUSES,
   updateTaskInGroups,
 } from "@/features/tasks/lib/task-board";
 import { projectTasksQueryKey } from "@/features/tasks/lib/task-query-keys";
-import { showSuccessToast } from "@/lib/toast";
+import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 type ProjectBoardShellProps = {
@@ -72,8 +92,10 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
   const tasksQuery = useProjectTasks(projectId);
   const createTaskMutation = useCreateTask(projectId);
   const updateTaskMutation = useUpdateTask();
+  const updateTaskStatusMutation = useUpdateTaskStatus();
   const deleteTaskMutation = useDeleteTask();
   const [drawerState, setDrawerState] = useState<TaskDrawerState | null>(null);
+  const [activeDragTaskId, setActiveDragTaskId] = useState<string | null>(null);
 
   const currentProject =
     projectsQuery.data?.items.find((project) => project.id === projectId) ?? null;
@@ -102,10 +124,22 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
       : drawerState.mode === "create"
         ? `create:${drawerState.initialStatus}`
         : `${drawerState.mode}:${drawerState.taskId}:${selectedTask?.updatedAt ?? "missing"}`;
+  const activeDragTask =
+    activeDragTaskId !== null
+      ? tasks.find((task) => task.id === activeDragTaskId) ?? null
+      : null;
   const isTaskMutationPending =
     createTaskMutation.isPending ||
     updateTaskMutation.isPending ||
+    updateTaskStatusMutation.isPending ||
     deleteTaskMutation.isPending;
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+  );
 
   if (tasksQuery.isPending) {
     return <ProjectBoardLoadingState projectName={projectName} />;
@@ -237,17 +271,179 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     });
   }
 
+  async function handleTaskStatusMove(
+    taskId: string,
+    targetStatus: TaskStatus,
+  ) {
+    await Promise.all([
+      queryClient.cancelQueries({
+        queryKey: projectTasksQueryKey(projectId),
+      }),
+      queryClient.cancelQueries({
+        queryKey: projectsQueryKey,
+      }),
+    ]);
+
+    const currentTaskResponse = queryClient.getQueryData<ProjectTasksResponse>(
+      projectTasksQueryKey(projectId),
+    );
+
+    if (!currentTaskResponse) {
+      return;
+    }
+
+    const moveResult = moveTaskToStatus(
+      currentTaskResponse.taskGroups,
+      taskId,
+      targetStatus,
+    );
+
+    if (!moveResult.changed || !moveResult.previousTask || !moveResult.nextTask) {
+      return;
+    }
+
+    const previousProjects = queryClient.getQueryData<ProjectsListResponse>(
+      projectsQueryKey,
+    );
+
+    queryClient.setQueryData<ProjectTasksResponse>(
+      projectTasksQueryKey(projectId),
+      {
+        taskGroups: moveResult.nextTaskGroups,
+      },
+    );
+    queryClient.setQueryData<ProjectsListResponse | undefined>(
+      projectsQueryKey,
+      (currentProjects) =>
+        applyTaskStatusChangeToProjectsList(
+          currentProjects,
+          projectId,
+          moveResult.previousTask.status,
+          targetStatus,
+        ),
+    );
+
+    try {
+      const updatedTask = await updateTaskStatusMutation.mutateAsync({
+        taskId,
+        request: {
+          status: targetStatus,
+        } satisfies UpdateTaskStatusRequest,
+      });
+
+      queryClient.setQueryData<ProjectTasksResponse>(
+        projectTasksQueryKey(projectId),
+        (latestTaskResponse) => ({
+          taskGroups: updateTaskInGroups(
+            latestTaskResponse?.taskGroups ?? moveResult.nextTaskGroups,
+            updatedTask,
+          ),
+        }),
+      );
+
+      void queryClient.invalidateQueries({
+        queryKey: projectsQueryKey,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: projectDetailQueryKey(projectId),
+      });
+    } catch (error) {
+      queryClient.setQueryData<ProjectTasksResponse>(
+        projectTasksQueryKey(projectId),
+        currentTaskResponse,
+      );
+      queryClient.setQueryData<ProjectsListResponse | undefined>(
+        projectsQueryKey,
+        previousProjects,
+      );
+      showApiErrorToast(error, "Task move failed and the board was restored.");
+    } finally {
+      void queryClient.invalidateQueries({
+        queryKey: projectTasksQueryKey(projectId),
+      });
+    }
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    if (typeof event.active.id === "string") {
+      setActiveDragTaskId(event.active.id);
+    }
+  }
+
+  function handleDragCancel() {
+    setActiveDragTaskId(null);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const taskId = typeof event.active.id === "string" ? event.active.id : null;
+    const targetStatus =
+      typeof event.over?.id === "string" &&
+      TASK_STATUSES.includes(event.over.id as TaskStatus)
+        ? (event.over.id as TaskStatus)
+        : null;
+
+    setActiveDragTaskId(null);
+
+    if (!taskId || !targetStatus) {
+      return;
+    }
+
+    const currentTask = tasks.find((task) => task.id === taskId);
+
+    if (!currentTask || currentTask.status === targetStatus) {
+      return;
+    }
+
+    void handleTaskStatusMove(taskId, targetStatus);
+  }
+
+  function openTask(task: TaskCard) {
+    setDrawerState({
+      mode: "view",
+      taskId: task.id,
+      initialStatus: task.status,
+    });
+  }
+
+  function openCreateTask(status: TaskStatus) {
+    setDrawerState({
+      mode: "create",
+      taskId: null,
+      initialStatus: status,
+    });
+  }
+
+  const desktopBoardLanes = lanes.map((lane) => (
+    <KanbanBoardLane
+      key={`desktop:${lane.status}`}
+      lane={lane}
+      onAddTask={openCreateTask}
+      onOpenTask={openTask}
+      presentation="desktop"
+    />
+  ));
+
+  const mobileBoardLanes = lanes.map((lane) => (
+    <KanbanBoardLane
+      key={`mobile:${lane.status}`}
+      lane={lane}
+      onAddTask={openCreateTask}
+      onOpenTask={openTask}
+      presentation="mobile"
+    />
+  ));
+
   return (
     <section className="space-y-4">
-      <Card className="overflow-hidden rounded-xl border-border/70 bg-card shadow-none">
+      <Card className="overflow-hidden border-border/70 bg-card shadow-sm">
         <CardContent className="space-y-4 px-4 py-4 sm:px-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <header className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="bg-background">
                   Project board
                 </Badge>
-                <Badge variant="muted" className="rounded-md px-2.5">
+                <Badge variant="muted" className="px-2">
                   {tasks.length} cards
                 </Badge>
               </div>
@@ -265,66 +461,45 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
             <Button
               type="button"
               size="sm"
-              className="rounded-lg"
-              onClick={() =>
-                setDrawerState({
-                  mode: "create",
-                  taskId: null,
-                  initialStatus: "TODO",
-                })
-              }
+              className="rounded-md"
+              onClick={() => openCreateTask("TODO")}
             >
               <Plus className="size-4" />
               Create task
             </Button>
-          </div>
+          </header>
 
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="justify-between rounded-lg bg-background shadow-none sm:min-w-[10rem]"
+                className="justify-between rounded-md bg-background shadow-none sm:min-w-[10rem]"
               >
                 All properties
                 <ChevronDown className="size-4" />
               </Button>
 
-              <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg border border-border/70 bg-background px-3 text-sm text-muted-foreground sm:min-w-[16rem]">
+              <button
+                type="button"
+                className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md border border-border/70 bg-background px-3 text-left text-sm text-muted-foreground shadow-none transition-colors hover:bg-muted/60 hover:text-foreground sm:min-w-[16rem]"
+              >
                 <Search className="size-4" />
                 <span className="truncate">Search title, assignee, due date</span>
-              </div>
+              </button>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="rounded-lg text-muted-foreground"
-              >
-                <Filter className="size-4" />
-                Filter
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="rounded-lg text-muted-foreground"
-              >
-                <LayoutGrid className="size-4" />
-                Group by lane
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="rounded-lg text-muted-foreground"
-              >
-                <ArrowUpDown className="size-4" />
-                Sort
-              </Button>
+              <QuietBoardControl icon={<Filter className="size-4" />} label="Filter" />
+              <QuietBoardControl
+                icon={<LayoutGrid className="size-4" />}
+                label="Group by lane"
+              />
+              <QuietBoardControl
+                icon={<ArrowUpDown className="size-4" />}
+                label="Sort"
+              />
             </div>
           </div>
 
@@ -334,9 +509,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
                 key={filter.label}
                 type="button"
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors",
+                  "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                   filter.active
-                    ? "border-border bg-background text-foreground shadow-xs"
+                    ? "border-border bg-background text-foreground shadow-sm"
                     : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground",
                 )}
               >
@@ -365,9 +540,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
                     : CircleCheckBig;
 
               return (
-                <div
+                <article
                   key={metric.label}
-                  className="rounded-lg border border-border/70 bg-surface-subtle/70 px-3.5 py-3"
+                  className="rounded-lg border border-border/70 bg-surface-subtle/55 px-3.5 py-3"
                 >
                   <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                     <Icon className="size-3.5 text-primary" />
@@ -376,98 +551,32 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
                   <p className="mt-2 text-2xl font-semibold tracking-tight">
                     {metric.value}
                   </p>
-                </div>
+                </article>
               );
             })}
           </div>
         </CardContent>
       </Card>
 
-      <ScrollArea className="w-full" data-testid="board-lanes-scroll-area">
-        <div className="grid gap-4 pb-3 lg:grid-cols-3">
-          {lanes.map((lane) => (
-            <section
-              key={lane.status}
-              className="min-w-0 rounded-xl border border-border/70 bg-card shadow-none"
-            >
-              <div className="border-b border-border/60 px-4 pt-4 pb-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "size-2 rounded-full",
-                          getLaneDotClassName(lane.status),
-                        )}
-                      />
-                      <h3 className="text-base font-semibold tracking-tight">
-                        {lane.title}
-                      </h3>
-                      <span className="rounded-sm bg-surface-subtle px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                        {lane.tasks.length}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                      {lane.description}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      className="rounded-md text-muted-foreground"
-                      aria-label={`Add task to ${lane.title}`}
-                      onClick={() =>
-                        setDrawerState({
-                          mode: "create",
-                          taskId: null,
-                          initialStatus: lane.status,
-                        })
-                      }
-                    >
-                      <Plus className="size-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      className="rounded-md text-muted-foreground"
-                      aria-label={`${lane.title} lane options`}
-                    >
-                      <MoreHorizontal className="size-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-3 p-3">
-                {lane.tasks.length === 0 ? (
-                  <LaneEmptyState lane={lane.title} />
-                ) : (
-                  lane.tasks.map((task) => (
-                    <button
-                      key={task.id}
-                      type="button"
-                      className="rounded-lg border border-border/70 bg-background px-3 py-3 text-left shadow-none transition-[border-color,background] duration-150 hover:border-primary/15 hover:bg-surface-subtle/40"
-                      onClick={() =>
-                        setDrawerState({
-                          mode: "view",
-                          taskId: task.id,
-                          initialStatus: task.status,
-                        })
-                      }
-                    >
-                      <BoardTaskCard task={task} />
-                    </button>
-                  ))
-                )}
-              </div>
-            </section>
-          ))}
-        </div>
-      </ScrollArea>
+      <DndContext
+        sensors={dragSensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragCancel={handleDragCancel}
+        onDragEnd={handleDragEnd}
+      >
+        <BoardContainer
+          desktopChildren={desktopBoardLanes}
+          mobileChildren={mobileBoardLanes}
+        />
+        <DragOverlay>
+          {activeDragTask ? (
+            <div className="w-[22rem]">
+              <BoardTaskCard task={activeDragTask} isDragging />
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       <TaskDrawer
         key={drawerStateKey}
@@ -506,15 +615,13 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
 function ProjectBoardLoadingState({ projectName }: { projectName: string }) {
   return (
     <section aria-label="Loading project tasks" className="space-y-4">
-      <Card className="overflow-hidden rounded-xl border-border/70 bg-card shadow-none">
+      <Card className="overflow-hidden border-border/70 bg-card shadow-sm">
         <CardContent className="space-y-4 px-4 py-4 sm:px-5">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="bg-background">
               Project board
             </Badge>
-            <Badge variant="muted" className="rounded-md px-2.5">
-              Loading
-            </Badge>
+            <Badge variant="muted">Loading</Badge>
           </div>
           <div className="space-y-2">
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -531,7 +638,7 @@ function ProjectBoardLoadingState({ projectName }: { projectName: string }) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="flex gap-4 overflow-hidden">
         <BoardLaneSkeleton title="Todo" />
         <BoardLaneSkeleton title="In progress" />
         <BoardLaneSkeleton title="Done" />
@@ -551,15 +658,13 @@ function ProjectBoardErrorState({
 }) {
   return (
     <section className="space-y-4">
-      <Card className="overflow-hidden rounded-xl border-border/70 bg-card shadow-none">
+      <Card className="overflow-hidden border-border/70 bg-card shadow-sm">
         <CardContent className="space-y-4 px-4 py-4 sm:px-5">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="bg-background">
               Project board
             </Badge>
-            <Badge variant="muted" className="rounded-md px-2.5">
-              Load blocked
-            </Badge>
+            <Badge variant="muted">Load blocked</Badge>
           </div>
           <div className="space-y-1.5">
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -572,7 +677,7 @@ function ProjectBoardErrorState({
         </CardContent>
       </Card>
 
-      <Card className="rounded-xl border-border/70 bg-card shadow-none">
+      <Card className="border-border/70 bg-card shadow-sm">
         <CardHeader>
           <CardTitle>We couldn&apos;t load the board right now.</CardTitle>
         </CardHeader>
@@ -580,7 +685,7 @@ function ProjectBoardErrorState({
           <p className="text-sm text-muted-foreground">
             Try the request again to reload the grouped tasks for this project.
           </p>
-          <Button type="button" onClick={onRetry} className="rounded-lg">
+          <Button type="button" onClick={onRetry} className="rounded-md">
             Retry loading tasks
           </Button>
         </CardContent>
@@ -589,16 +694,36 @@ function ProjectBoardErrorState({
   );
 }
 
+function QuietBoardControl({
+  icon,
+  label,
+}: {
+  icon: ReactNode;
+  label: string;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="rounded-md text-muted-foreground"
+    >
+      {icon}
+      {label}
+    </Button>
+  );
+}
+
 function BoardLaneSkeleton({ title }: { title: string }) {
   return (
-    <section className="min-w-0 rounded-xl border border-border/70 bg-card shadow-none">
-      <div className="border-b border-border/60 px-4 pt-4 pb-3">
+    <section className="w-[22rem] shrink-0 overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+      <header className="border-b border-border/60 px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="size-2 rounded-full bg-muted" />
-          <h3 className="text-base font-semibold tracking-tight">{title}</h3>
+          <span className={cn("size-2 rounded-full", getLaneDotClassName(getLaneStatus(title)))} />
+          <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
         </div>
-      </div>
-      <div className="grid gap-3 p-3">
+      </header>
+      <div className="grid gap-2.5 p-3">
         <Skeleton className="h-32 rounded-lg" />
         <Skeleton className="h-32 rounded-lg" />
       </div>
@@ -606,25 +731,14 @@ function BoardLaneSkeleton({ title }: { title: string }) {
   );
 }
 
-function LaneEmptyState({ lane }: { lane: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-border/70 bg-surface-subtle/30 px-4 py-6 text-center">
-      <p className="text-sm font-semibold text-foreground">No cards in {lane}.</p>
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        This lane will fill automatically when tasks arrive for this workflow state.
-      </p>
-    </div>
-  );
-}
-
-function getLaneDotClassName(status: TaskStatus) {
-  if (status === "IN_PROGRESS") {
-    return "bg-in-progress";
+function getLaneStatus(title: string): TaskStatus {
+  if (title === "In progress") {
+    return "IN_PROGRESS";
   }
 
-  if (status === "DONE") {
-    return "bg-done";
+  if (title === "Done") {
+    return "DONE";
   }
 
-  return "bg-todo";
+  return "TODO";
 }

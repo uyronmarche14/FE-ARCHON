@@ -1,15 +1,15 @@
-  import type { ApiEnvelope } from "@/contracts/api";
-import type { TaskCard, UpdateTaskRequest } from "@/contracts/tasks";
+import type { ApiEnvelope } from "@/contracts/api";
+import type { TaskCard, UpdateTaskStatusRequest } from "@/contracts/tasks";
 import { apiClient } from "@/services/http/axios-client";
 import { normalizeApiClientError } from "@/services/http/api-client-error";
 
-export async function updateTask(
+export async function patchTaskStatus(
   taskId: string,
-  request: UpdateTaskRequest,
+  request: UpdateTaskStatusRequest,
 ): Promise<TaskCard> {
   try {
-    const response = await apiClient.put<ApiEnvelope<TaskCard>>(
-      `/tasks/${taskId}`,
+    const response = await apiClient.patch<ApiEnvelope<TaskCard>>(
+      `/tasks/${taskId}/status`,
       request,
     );
     const data = response.data as ApiEnvelope<TaskCard>;

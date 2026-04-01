@@ -1,4 +1,4 @@
-import type { ProjectSummary } from "@/contracts/projects";
+import type { ProjectsListResponse, ProjectSummary } from "@/contracts/projects";
 import type { TaskCard, TaskGroups, TaskStatus } from "@/contracts/tasks";
 
 export type BoardLane = {
@@ -102,6 +102,36 @@ export function updateTaskInGroups(
   return nextGroups;
 }
 
+export function moveTaskToStatus(
+  taskGroups: TaskGroups,
+  taskId: string,
+  nextStatus: TaskStatus,
+) {
+  const previousTask = flattenTaskGroups(taskGroups).find((task) => task.id === taskId);
+
+  if (!previousTask || previousTask.status === nextStatus) {
+    return {
+      changed: false,
+      nextTask: null,
+      nextTaskGroups: taskGroups,
+      previousTask: previousTask ?? null,
+    } as const;
+  }
+
+  const nextTask: TaskCard = {
+    ...previousTask,
+    status: nextStatus,
+    position: null,
+  };
+
+  return {
+    changed: true,
+    nextTask,
+    nextTaskGroups: updateTaskInGroups(taskGroups, nextTask),
+    previousTask,
+  } as const;
+}
+
 export function removeTaskFromGroups(
   taskGroups: TaskGroups,
   taskId: string,
@@ -113,6 +143,32 @@ export function removeTaskFromGroups(
   }
 
   return nextGroups;
+}
+
+export function applyTaskStatusChangeToProjectsList(
+  projects: ProjectsListResponse | undefined,
+  projectId: string,
+  fromStatus: TaskStatus,
+  toStatus: TaskStatus,
+) {
+  if (!projects || fromStatus === toStatus) {
+    return projects;
+  }
+
+  return {
+    items: projects.items.map((project) =>
+      project.id === projectId
+        ? {
+            ...project,
+            taskCounts: {
+              ...project.taskCounts,
+              [fromStatus]: Math.max(0, project.taskCounts[fromStatus] - 1),
+              [toStatus]: project.taskCounts[toStatus] + 1,
+            },
+          }
+        : project,
+    ),
+  } satisfies ProjectsListResponse;
 }
 
 export function getBoardProjectName(
@@ -135,7 +191,7 @@ export function getTaskAssigneeLabel(assigneeId: string | null) {
 
 export function getTaskAssigneeInitials(assigneeId: string | null) {
   if (!assigneeId) {
-    return "UN";
+    return "UA";
   }
 
   const cleanedValue = assigneeId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
@@ -144,19 +200,19 @@ export function getTaskAssigneeInitials(assigneeId: string | null) {
 }
 
 export function getTaskDueLabel(dueDate: string | null) {
-  return dueDate ? `Due ${dueDate}` : "No due date";
+  return dueDate ? `Due ${formatBoardDate(dueDate)}` : "No due date";
 }
 
 export function getTaskUpdatedLabel(updatedAt: string) {
-  return `Updated ${updatedAt.slice(0, 10)}`;
+  return `Updated ${formatBoardDate(updatedAt)}`;
 }
 
 export function getTaskPositionLabel(position: number | null, status: TaskStatus) {
   if (position === null) {
-    return `No fixed position in ${formatTaskStatusLabel(status)}.`;
+    return `No fixed order in ${formatTaskStatusLabel(status)}.`;
   }
 
-  return `Card ${position} in the ${formatTaskStatusLabel(status)} lane.`;
+  return `Card ${position} in ${formatTaskStatusLabel(status)}.`;
 }
 
 export function formatTaskStatusLabel(status: TaskStatus) {
@@ -211,4 +267,18 @@ function humanizeProjectSlug(projectId: string) {
     .filter(Boolean)
     .map((segment) => segment[0]?.toUpperCase() + segment.slice(1))
     .join(" ");
+}
+
+function formatBoardDate(value: string) {
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsedDate);
 }

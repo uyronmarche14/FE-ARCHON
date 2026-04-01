@@ -1,19 +1,114 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClientError } from "@/services/http/api-client-error";
 import { ProjectBoardShell } from "@/features/tasks/components/project-board-shell";
+import { projectsQueryKey } from "@/features/projects/lib/project-query-keys";
 
 const getProjectsMock = vi.hoisted(() => vi.fn());
 const getProjectTasksMock = vi.hoisted(() => vi.fn());
 const getProjectDetailMock = vi.hoisted(() => vi.fn());
 const createTaskMock = vi.hoisted(() => vi.fn());
 const updateTaskMock = vi.hoisted(() => vi.fn());
+const patchTaskStatusMock = vi.hoisted(() => vi.fn());
 const deleteTaskMock = vi.hoisted(() => vi.fn());
+const dndMock = vi.hoisted(() => {
+  type DragHandlers = {
+    onDragCancel?: () => void;
+    onDragEnd?: (event: {
+      active: { id: string };
+      over: { id: string } | null;
+    }) => void;
+    onDragStart?: (event: { active: { id: string } }) => void;
+  };
+
+  let handlers: DragHandlers = {};
+
+  return {
+    registerHandlers(nextHandlers: DragHandlers) {
+      handlers = nextHandlers;
+    },
+    reset() {
+      handlers = {};
+    },
+    triggerDragCancel() {
+      handlers.onDragCancel?.();
+    },
+    triggerDragEnd(activeId: string, overId: string | null) {
+      handlers.onDragEnd?.({
+        active: { id: activeId },
+        over: overId ? { id: overId } : null,
+      });
+    },
+    triggerDragStart(activeId: string) {
+      handlers.onDragStart?.({
+        active: { id: activeId },
+      });
+    },
+  };
+});
 const toastMocks = vi.hoisted(() => ({
   showSuccessToast: vi.fn(),
   showApiErrorToast: vi.fn(),
 }));
+
+vi.mock("@dnd-kit/core", async () => {
+  const React = await import("react");
+
+  function DndContext({
+    children,
+    onDragCancel,
+    onDragEnd,
+    onDragStart,
+  }: {
+    children: React.ReactNode;
+    onDragCancel?: () => void;
+    onDragEnd?: (event: {
+      active: { id: string };
+      over: { id: string } | null;
+    }) => void;
+    onDragStart?: (event: { active: { id: string } }) => void;
+  }) {
+    React.useEffect(() => {
+      dndMock.registerHandlers({
+        onDragCancel,
+        onDragEnd,
+        onDragStart,
+      });
+    }, [onDragCancel, onDragEnd, onDragStart]);
+
+    return React.createElement(React.Fragment, null, children);
+  }
+
+  return {
+    closestCorners: vi.fn(),
+    DndContext,
+    DragOverlay: () => null,
+    PointerSensor: function PointerSensor() {
+      return null;
+    },
+    useDraggable: () => ({
+      attributes: {},
+      isDragging: false,
+      listeners: {},
+      setNodeRef: vi.fn(),
+      transform: null,
+    }),
+    useDroppable: () => ({
+      isOver: false,
+      setNodeRef: vi.fn(),
+    }),
+    useSensor: vi.fn((_sensor: unknown, options?: unknown) => options ?? null),
+    useSensors: (...sensors: unknown[]) => sensors,
+  };
+});
 
 vi.mock("lucide-react", () => {
   const Icon = () => null;
@@ -25,6 +120,7 @@ vi.mock("lucide-react", () => {
     ChevronDown: Icon,
     CircleCheckBig: Icon,
     Filter: Icon,
+    GripVertical: Icon,
     LayoutGrid: Icon,
     Layers3: Icon,
     LoaderCircle: Icon,
@@ -58,6 +154,10 @@ vi.mock("@/features/tasks/services/update-task", () => ({
   updateTask: updateTaskMock,
 }));
 
+vi.mock("@/features/tasks/services/patch-task-status", () => ({
+  patchTaskStatus: patchTaskStatusMock,
+}));
+
 vi.mock("@/features/tasks/services/delete-task", () => ({
   deleteTask: deleteTaskMock,
 }));
@@ -76,11 +176,36 @@ function renderBoard(projectId = "qa-readiness") {
     },
   });
 
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <ProjectBoardShell projectId={projectId} />
-    </QueryClientProvider>,
-  );
+  return {
+    queryClient,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <ProjectBoardShell projectId={projectId} />
+      </QueryClientProvider>,
+    ),
+  };
+}
+
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: width,
+    writable: true,
+  });
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("min-width: 768px)") ? width >= 768 : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+  window.dispatchEvent(new Event("resize"));
 }
 
 function createDeferredPromise<T>() {
@@ -93,6 +218,28 @@ function createDeferredPromise<T>() {
   });
 
   return { promise, resolve, reject };
+}
+
+async function findTaskOpenButton(title: string) {
+  const titleElement = await screen.findByText(title);
+  const button = titleElement.closest("button");
+
+  if (!button) {
+    throw new Error(`Task button for "${title}" was not found.`);
+  }
+
+  return button;
+}
+
+function getTaskOpenButton(title: string) {
+  const titleElement = screen.getByText(title);
+  const button = titleElement.closest("button");
+
+  if (!button) {
+    throw new Error(`Task button for "${title}" was not found.`);
+  }
+
+  return button;
 }
 
 type TaskState = Array<{
@@ -134,6 +281,8 @@ function createProjectSummaryFromTasks(tasks: TaskState) {
 
 describe("ProjectBoardShell", () => {
   beforeEach(() => {
+    setViewportWidth(1024);
+
     taskState = [
       {
         id: "task-api-envelope",
@@ -166,7 +315,9 @@ describe("ProjectBoardShell", () => {
     getProjectDetailMock.mockReset();
     createTaskMock.mockReset();
     updateTaskMock.mockReset();
+    patchTaskStatusMock.mockReset();
     deleteTaskMock.mockReset();
+    dndMock.reset();
     toastMocks.showSuccessToast.mockReset();
     toastMocks.showApiErrorToast.mockReset();
 
@@ -252,6 +403,31 @@ describe("ProjectBoardShell", () => {
         return updatedTask;
       },
     );
+    patchTaskStatusMock.mockImplementation(
+      async (
+        taskId: string,
+        request: { status: "TODO" | "IN_PROGRESS" | "DONE"; position?: number | null },
+      ) => {
+        const existingTask = taskState.find((task) => task.id === taskId);
+
+        if (!existingTask) {
+          throw new Error("Task not found");
+        }
+
+        const updatedTask = {
+          ...existingTask,
+          status: request.status,
+          position: request.position ?? null,
+          updatedAt: "2026-04-06T09:00:00.000Z",
+        };
+
+        taskState = taskState.map((task) =>
+          task.id === taskId ? updatedTask : task,
+        );
+
+        return updatedTask;
+      },
+    );
     deleteTaskMock.mockImplementation(async (taskId: string) => {
       taskState = taskState.filter((task) => task.id !== taskId);
 
@@ -308,18 +484,14 @@ describe("ProjectBoardShell", () => {
       },
     });
 
-    expect(
-      await screen.findByRole("button", { name: /draft api envelope/i }),
-    ).toBeInTheDocument();
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
     expect(screen.getByText("Draft API envelope")).toBeInTheDocument();
   });
 
   it("renders live grouped task lanes and opens a 40vw drawer from a task card", async () => {
     renderBoard();
 
-    expect(
-      await screen.findByRole("button", { name: /draft api envelope/i }),
-    ).toBeInTheDocument();
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
     expect(
       screen.getByText("Search title, assignee, due date"),
     ).toBeInTheDocument();
@@ -332,10 +504,11 @@ describe("ProjectBoardShell", () => {
       screen.getByRole("heading", { name: "In progress" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Done" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /drag draft api envelope/i }),
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /draft api envelope/i }),
-    );
+    fireEvent.click(getTaskOpenButton("Draft API envelope"));
 
     const drawer = await screen.findByRole("dialog", {
       name: /draft api envelope/i,
@@ -345,12 +518,100 @@ describe("ProjectBoardShell", () => {
     expect(drawer).toHaveClass("md:w-[40vw]");
   });
 
+  it("moves a task across lanes optimistically and calls the status patch endpoint", async () => {
+    const { queryClient } = renderBoard();
+
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
+
+    expect(
+      within(screen.getByTestId("lane-todo")).getByText("Draft API envelope"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("lane-done")).queryByText("Draft API envelope"),
+    ).not.toBeInTheDocument();
+
+    await act(async () => {
+      dndMock.triggerDragStart("task-api-envelope");
+      dndMock.triggerDragEnd("task-api-envelope", "DONE");
+    });
+
+    await waitFor(() => {
+      expect(patchTaskStatusMock).toHaveBeenCalledWith("task-api-envelope", {
+        status: "DONE",
+      });
+    });
+
+    expect(
+      within(screen.getByTestId("lane-done")).getByText("Draft API envelope"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("lane-todo")).queryByText("Draft API envelope"),
+    ).not.toBeInTheDocument();
+
+    expect(queryClient.getQueryData(projectsQueryKey)).toMatchObject({
+      items: [
+        {
+          id: "qa-readiness",
+          taskCounts: {
+            TODO: 0,
+            IN_PROGRESS: 1,
+            DONE: 1,
+          },
+        },
+      ],
+    });
+  });
+
+  it("rolls the board state back when a status patch fails", async () => {
+    patchTaskStatusMock.mockRejectedValueOnce(
+      new ApiClientError({
+        message: "Status update failed",
+        code: "VALIDATION_ERROR",
+        status: 400,
+        details: undefined,
+      }),
+    );
+
+    const { queryClient } = renderBoard();
+
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
+
+    await act(async () => {
+      dndMock.triggerDragEnd("task-api-envelope", "DONE");
+    });
+
+    await waitFor(() => {
+      expect(toastMocks.showApiErrorToast).toHaveBeenCalledWith(
+        expect.any(ApiClientError),
+        "Task move failed and the board was restored.",
+      );
+    });
+
+    expect(
+      within(screen.getByTestId("lane-todo")).getByText("Draft API envelope"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("lane-done")).queryByText("Draft API envelope"),
+    ).not.toBeInTheDocument();
+
+    expect(queryClient.getQueryData(projectsQueryKey)).toMatchObject({
+      items: [
+        {
+          id: "qa-readiness",
+          taskCounts: {
+            TODO: 1,
+            IN_PROGRESS: 1,
+            DONE: 0,
+          },
+        },
+      ],
+    });
+  });
+
   it("opens create from the header with Todo selected by default", async () => {
     renderBoard();
 
-    expect(
-      await screen.findByRole("button", { name: /draft api envelope/i }),
-    ).toBeInTheDocument();
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
     expect(getProjectDetailMock).toHaveBeenCalledTimes(0);
 
     fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
@@ -377,9 +638,7 @@ describe("ProjectBoardShell", () => {
   it("opens create from a lane, loads members, and adds the task to that lane", async () => {
     renderBoard();
 
-    expect(
-      await screen.findByRole("button", { name: /draft api envelope/i }),
-    ).toBeInTheDocument();
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /add task to done/i }));
 
@@ -428,13 +687,9 @@ describe("ProjectBoardShell", () => {
   it("edits a task and returns the drawer to view mode", async () => {
     renderBoard();
 
-    expect(
-      await screen.findByRole("button", { name: /wire refresh token flow/i }),
-    ).toBeInTheDocument();
+    expect(await findTaskOpenButton("Wire refresh token flow")).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /wire refresh token flow/i }),
-    );
+    fireEvent.click(getTaskOpenButton("Wire refresh token flow"));
     fireEvent.click(screen.getByRole("button", { name: /edit task/i }));
 
     expect(await screen.findByRole("heading", { name: /edit task/i })).toBeInTheDocument();
@@ -468,13 +723,9 @@ describe("ProjectBoardShell", () => {
   it("shows inline delete confirmation and removes the task on delete", async () => {
     renderBoard();
 
-    expect(
-      await screen.findByRole("button", { name: /draft api envelope/i }),
-    ).toBeInTheDocument();
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /draft api envelope/i }),
-    );
+    fireEvent.click(getTaskOpenButton("Draft API envelope"));
     fireEvent.click(screen.getByRole("button", { name: /delete task/i }));
 
     expect(
@@ -570,9 +821,7 @@ describe("ProjectBoardShell", () => {
 
     renderBoard();
 
-    expect(
-      await screen.findByRole("button", { name: /draft api envelope/i }),
-    ).toBeInTheDocument();
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
     fireEvent.change(screen.getByLabelText("Task title"), {
@@ -588,5 +837,17 @@ describe("ProjectBoardShell", () => {
       await screen.findByText("Task title must be 160 characters or fewer."),
     ).toBeInTheDocument();
     expect(toastMocks.showApiErrorToast).not.toHaveBeenCalled();
+  });
+
+  it("stacks all lanes on mobile so every drop target stays visible", async () => {
+    setViewportWidth(480);
+
+    renderBoard();
+
+    expect(await screen.findByTestId("mobile-board-lane-stack")).toBeInTheDocument();
+    expect(screen.queryByTestId("board-lanes-scroll-area")).not.toBeInTheDocument();
+    expect(screen.getByText("Draft API envelope")).toBeInTheDocument();
+    expect(screen.getByText("Wire refresh token flow")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Done" })).toBeInTheDocument();
   });
 });
