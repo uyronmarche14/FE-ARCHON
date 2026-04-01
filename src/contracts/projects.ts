@@ -1,6 +1,6 @@
-export type ProjectStatus = "TODO" | "IN_PROGRESS" | "DONE";
+import type { TaskStatus } from "@/contracts/tasks";
 
-export type ProjectTaskCounts = Record<ProjectStatus, number>;
+export type ProjectTaskCounts = Record<TaskStatus, number>;
 
 export type ProjectRole = "OWNER" | "MEMBER";
 

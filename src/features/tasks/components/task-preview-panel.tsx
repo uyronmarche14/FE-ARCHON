@@ -1,17 +1,24 @@
 "use client";
 
-import { CalendarClock, Flag, Layers3 } from "lucide-react";
+import { CalendarClock, Layers3, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import type { PlaceholderTaskCard } from "@/features/tasks/lib/placeholder-board-data";
+import type { TaskCard } from "@/contracts/tasks";
+import {
+  formatTaskStatusLabel,
+  getTaskAssigneeLabel,
+  getTaskDueLabel,
+  getTaskPositionLabel,
+  getTaskUpdatedLabel,
+} from "@/features/tasks/lib/task-board";
 
 type TaskPreviewPanelProps = {
   presentation?: "hover" | "sheet";
-  task: PlaceholderTaskCard;
+  task: TaskCard;
 };
 
 export function TaskPreviewPanel({
@@ -29,33 +36,33 @@ export function TaskPreviewPanel({
         <TaskMetaBlock
           icon={<CalendarClock className="size-4 text-primary" />}
           label="Due"
-          value={task.dueLabel}
+          value={getTaskDueLabel(task.dueDate)}
         />
         <TaskMetaBlock
-          icon={<Flag className="size-4 text-primary" />}
-          label="Priority"
-          value={task.priorityLabel}
+          icon={<UserRound className="size-4 text-primary" />}
+          label="Assignee"
+          value={getTaskAssigneeLabel(task.assigneeId)}
         />
       </div>
 
       <div className="rounded-2xl border border-border/70 bg-surface-subtle px-4 py-4">
         <p className="text-sm font-semibold">Task summary</p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          {task.description}
+          {task.description ?? "No description available yet."}
         </p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
         <div className="rounded-2xl border border-border/70 bg-surface-subtle px-4 py-4">
-          <p className="text-sm font-semibold">Assignee</p>
+          <p className="text-sm font-semibold">Position</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            {task.assigneeName}
+            {getTaskPositionLabel(task.position, task.status)}
           </p>
         </div>
         <div className="rounded-2xl border border-border/70 bg-surface-subtle px-4 py-4">
-          <p className="text-sm font-semibold">Position</p>
+          <p className="text-sm font-semibold">Recent activity</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Card {task.position} in the {formatStatusLabel(task.status)} lane.
+            {getTaskUpdatedLabel(task.updatedAt)}
           </p>
         </div>
       </div>
@@ -70,10 +77,12 @@ export function TaskPreviewPanel({
             <Badge variant={getStatusBadgeVariant(task.status)}>
               {formatStatusLabel(task.status)}
             </Badge>
-            <Badge variant="outline">{task.priorityLabel} priority</Badge>
+            <Badge variant="outline">{getTaskAssigneeLabel(task.assigneeId)}</Badge>
           </div>
           <SheetTitle>{task.title}</SheetTitle>
-          <SheetDescription>{task.description}</SheetDescription>
+          <SheetDescription>
+            {task.description ?? "No description available yet."}
+          </SheetDescription>
         </SheetHeader>
         {body}
       </div>
@@ -87,12 +96,12 @@ export function TaskPreviewPanel({
           <Badge variant={getStatusBadgeVariant(task.status)}>
             {formatStatusLabel(task.status)}
           </Badge>
-          <Badge variant="outline">{task.priorityLabel} priority</Badge>
+          <Badge variant="outline">{getTaskAssigneeLabel(task.assigneeId)}</Badge>
         </div>
         <div className="space-y-1">
           <h3 className="text-base font-semibold tracking-tight">{task.title}</h3>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            {task.description}
+            {task.description ?? "No description available yet."}
           </p>
         </div>
       </div>
@@ -121,19 +130,11 @@ function TaskMetaBlock({
   );
 }
 
-function formatStatusLabel(status: PlaceholderTaskCard["status"]) {
-  if (status === "IN_PROGRESS") {
-    return "In progress";
-  }
-
-  if (status === "DONE") {
-    return "Done";
-  }
-
-  return "Todo";
+function formatStatusLabel(status: TaskCard["status"]) {
+  return formatTaskStatusLabel(status);
 }
 
-function getStatusBadgeVariant(status: PlaceholderTaskCard["status"]) {
+function getStatusBadgeVariant(status: TaskCard["status"]) {
   if (status === "IN_PROGRESS") {
     return "progress" as const;
   }

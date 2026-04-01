@@ -228,18 +228,23 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                 </Tooltip>
               </div>
 
-              <CreateProjectDialog
-                trigger={
-                  <Button
-                    size="sm"
-                    className="rounded-md"
-                    aria-label="Quick create project"
-                  >
-                    <Plus className="size-4" />
-                    <span className="hidden lg:inline">Quick create</span>
-                  </Button>
-                }
-              />
+              <Tooltip>
+                <CreateProjectDialog
+                  trigger={
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="rounded-md bg-background shadow-sm border-border/80 text-muted-foreground size-8"
+                        aria-label="Quick create project"
+                      >
+                        <Plus className="size-[1.05rem]" />
+                      </Button>
+                    </TooltipTrigger>
+                  }
+                />
+                <TooltipContent>Create a new project without leaving the current page.</TooltipContent>
+              </Tooltip>
 
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -260,7 +265,7 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="rounded-md bg-background shadow-sm border-border/80 text-muted-foreground size-9"
+                    className="rounded-md bg-background shadow-sm border-border/80 text-muted-foreground size-8"
                     aria-label="Notifications"
                   >
                     <Bell className="size-[1.1rem]" />
