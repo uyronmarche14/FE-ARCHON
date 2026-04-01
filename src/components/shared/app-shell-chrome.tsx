@@ -189,19 +189,20 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
             </SidebarMenu>
           </SidebarGroup>
         </SidebarContent>
-
-
       </Sidebar>
 
       <SidebarInset>
         <header className="sticky top-0 z-20 bg-muted/30 px-4 pt-4 pb-4 backdrop-blur-md sm:px-6 sm:py-5 border-b border-border/40">
           <div className="flex items-center justify-between">
-            <div className="flex flitems-center gap-3 min-w-0">
+            <div className="flex min-w-0 items-center gap-3">
               <SidebarTrigger />
-              <div className="min-w-0 pl-1 flex flex-row items-center">
-                <p className="text-[14px] font-semibold  text-muted-foreground uppercase">
-                  Workspace <span className="font-bold">{activeLabel}</span>
+              <div className="min-w-0 pl-1">
+                <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+                  Workspace
                 </p>
+                <h1 className="truncate text-[14px] font-semibold text-foreground sm:text-[15px]">
+                  {activeLabel}
+                </h1>
               </div>
             </div>
 
@@ -227,7 +228,18 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                 </Tooltip>
               </div>
 
-
+              <CreateProjectDialog
+                trigger={
+                  <Button
+                    size="sm"
+                    className="rounded-md"
+                    aria-label="Quick create project"
+                  >
+                    <Plus className="size-4" />
+                    <span className="hidden lg:inline">Quick create</span>
+                  </Button>
+                }
+              />
 
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -248,10 +260,10 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="rounded-md bg-background shadow-sm border-border/80 text-muted-foreground size-8"
+                    className="rounded-md bg-background shadow-sm border-border/80 text-muted-foreground size-9"
                     aria-label="Notifications"
                   >
-                    <Bell className="size-[1rem]" />
+                    <Bell className="size-[1.1rem]" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Notifications are visual-only in this pass.</TooltipContent>
