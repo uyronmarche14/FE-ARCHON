@@ -3,10 +3,22 @@ import type { TaskLogsResponse } from "@/contracts/tasks";
 import { apiClient } from "@/services/http/axios-client";
 import { normalizeApiClientError } from "@/services/http/api-client-error";
 
-export async function getTaskLogs(taskId: string): Promise<TaskLogsResponse> {
+export async function getTaskLogs(
+  taskId: string,
+  options: {
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<TaskLogsResponse> {
   try {
     const response = await apiClient.get<ApiEnvelope<TaskLogsResponse>>(
       `/tasks/${taskId}/logs`,
+      {
+        params: {
+          ...(options.page ? { page: options.page } : {}),
+          ...(options.pageSize ? { pageSize: options.pageSize } : {}),
+        },
+      },
     );
     const data = response.data as ApiEnvelope<TaskLogsResponse>;
 

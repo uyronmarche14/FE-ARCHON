@@ -15,7 +15,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
   const isAuthRoute = pathname === "/login" || pathname === "/signup";
 
   return (
-    <AuthSessionProvider bootstrapSession={false}>
+    <AuthSessionProvider bootstrapSession={!isAuthRoute}>
       <div className="min-h-screen bg-background">
         {isAuthRoute ? null : (
           <header className="sticky top-0 z-30 border-b border-border/60 bg-background/95 backdrop-blur-sm">

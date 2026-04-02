@@ -71,4 +71,7 @@ export type TaskLogEntry = {
 
 export type TaskLogsResponse = {
   items: TaskLogEntry[];
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
 };

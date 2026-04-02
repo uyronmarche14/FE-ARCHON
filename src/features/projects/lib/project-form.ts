@@ -58,7 +58,9 @@ export function mapProjectFormErrors(
   };
 }
 
-function readProjectFieldError(detail?: string[] | string) {
+function readProjectFieldError(
+  detail?: string | number | boolean | string[] | null,
+) {
   if (Array.isArray(detail)) {
     return detail[0];
   }

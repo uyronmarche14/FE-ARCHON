@@ -66,6 +66,8 @@ export function TaskDrawer({
     task?.id ?? "",
     open && mode === "view" && task !== null,
   );
+  const taskLogEntries =
+    taskLogsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const [formValues, setFormValues] = useState<TaskFormValues>(
     createTaskFormValues(initialStatus, task),
   );
@@ -232,9 +234,14 @@ export function TaskDrawer({
           <div className="grid gap-4">
             <TaskPreviewPanel task={task} presentation="sheet" />
             <TaskLogsTimeline
-              entries={taskLogsQuery.data?.items ?? []}
+              entries={taskLogEntries}
+              hasMore={taskLogsQuery.hasNextPage ?? false}
+              isFetchingMore={taskLogsQuery.isFetchingNextPage}
               isLoading={taskLogsQuery.isPending}
               errorMessage={taskLogsQuery.isError ? "Try the request again to load the latest task history." : null}
+              onLoadMore={() => {
+                void taskLogsQuery.fetchNextPage();
+              }}
               onRetry={() => {
                 void taskLogsQuery.refetch();
               }}

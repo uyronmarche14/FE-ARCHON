@@ -135,7 +135,9 @@ function normalizeOptionalText(value: string) {
   return normalizedValue.length > 0 ? normalizedValue : null;
 }
 
-function readTaskFieldError(detail?: string[] | string) {
+function readTaskFieldError(
+  detail?: string | number | boolean | string[] | null,
+) {
   if (Array.isArray(detail)) {
     return detail[0];
   }

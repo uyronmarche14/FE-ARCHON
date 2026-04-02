@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import {
   closestCorners,
   DndContext,
@@ -14,11 +13,8 @@ import {
 } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowUpDown,
   CalendarClock,
-  ChevronDown,
   CircleCheckBig,
-  Filter,
   LayoutGrid,
   Plus,
   Search,
@@ -28,17 +24,23 @@ import type {
   CreateTaskRequest,
   ProjectTasksResponse,
   TaskCard,
+  TaskLogEventType,
   TaskStatus,
   UpdateTaskRequest,
   UpdateTaskStatusRequest,
 } from "@/contracts/tasks";
+import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { InviteMemberDialog } from "@/features/projects/components/invite-member-dialog";
 import { getLaneDotClassName } from "@/features/tasks/components/board-column";
 import { BoardContainer } from "@/features/tasks/components/board-container";
 import { KanbanBoardLane } from "@/features/tasks/components/kanban-board-lane";
+import { ProjectActivityFeedCard } from "@/features/tasks/components/project-activity-feed-card";
 import { TaskCard as BoardTaskCard } from "@/features/tasks/components/task-card";
 import { TaskDrawer } from "@/features/tasks/components/task-drawer";
 import { useProjects } from "@/features/projects/hooks/use-projects";
@@ -48,15 +50,21 @@ import {
 } from "@/features/projects/lib/project-query-keys";
 import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
 import { useDeleteTask } from "@/features/tasks/hooks/use-delete-task";
+import { useProjectMembers } from "@/features/tasks/hooks/use-project-members";
 import { useProjectTasks } from "@/features/tasks/hooks/use-project-tasks";
 import { useUpdateTask } from "@/features/tasks/hooks/use-update-task";
 import { useUpdateTaskStatus } from "@/features/tasks/hooks/use-update-task-status";
 import {
   applyTaskStatusChangeToProjectsList,
+  type BoardTaskAssigneeFilter,
+  type BoardTaskDueDateFilter,
+  type BoardTaskSort,
+  createAssigneeFilterOptions,
   createBoardFilters,
   createBoardLanes,
   createBoardMetrics,
   createEmptyTaskGroups,
+  filterAndSortTaskGroups,
   flattenTaskGroups,
   getBoardProjectDescription,
   getBoardProjectName,
@@ -91,27 +99,62 @@ type TaskDrawerState =
 
 export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
   const queryClient = useQueryClient();
+  const { session } = useAuthSession();
   const projectsQuery = useProjects();
   const tasksQuery = useProjectTasks(projectId);
+  const membersQuery = useProjectMembers(projectId, !tasksQuery.isPending);
   const createTaskMutation = useCreateTask(projectId);
   const updateTaskMutation = useUpdateTask();
   const updateTaskStatusMutation = useUpdateTaskStatus();
   const deleteTaskMutation = useDeleteTask();
   const [drawerState, setDrawerState] = useState<TaskDrawerState | null>(null);
   const [activeDragTaskId, setActiveDragTaskId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [assigneeFilter, setAssigneeFilter] =
+    useState<BoardTaskAssigneeFilter>("ALL");
+  const [dueDateFilter, setDueDateFilter] =
+    useState<BoardTaskDueDateFilter>("ALL");
+  const [sortOrder, setSortOrder] = useState<BoardTaskSort>("DEFAULT");
+  const [activityEventType, setActivityEventType] =
+    useState<TaskLogEventType | "ALL">("ALL");
+  const [activitySearchQuery, setActivitySearchQuery] = useState("");
 
   const currentProject =
     projectsQuery.data?.items.find((project) => project.id === projectId) ?? null;
   const projectName = getBoardProjectName(projectId, currentProject);
   const projectDescription = getBoardProjectDescription(currentProject);
   const taskGroups = tasksQuery.data?.taskGroups ?? createEmptyTaskGroups();
-  const tasks = useMemo(() => flattenTaskGroups(taskGroups), [taskGroups]);
-  const lanes = useMemo(() => createBoardLanes(taskGroups), [taskGroups]);
-  const metrics = useMemo(() => createBoardMetrics(taskGroups), [taskGroups]);
-  const boardFilters = useMemo(() => createBoardFilters(taskGroups), [taskGroups]);
+  const allTasks = useMemo(() => flattenTaskGroups(taskGroups), [taskGroups]);
+  const visibleTaskGroups = useMemo(
+    () =>
+      filterAndSortTaskGroups(taskGroups, {
+        searchQuery,
+        assigneeFilter,
+        dueDateFilter,
+        sortOrder,
+      }),
+    [assigneeFilter, dueDateFilter, searchQuery, sortOrder, taskGroups],
+  );
+  const visibleTasks = useMemo(
+    () => flattenTaskGroups(visibleTaskGroups),
+    [visibleTaskGroups],
+  );
+  const lanes = useMemo(() => createBoardLanes(visibleTaskGroups), [visibleTaskGroups]);
+  const metrics = useMemo(
+    () => createBoardMetrics(visibleTaskGroups),
+    [visibleTaskGroups],
+  );
+  const boardFilters = useMemo(
+    () => createBoardFilters(visibleTaskGroups),
+    [visibleTaskGroups],
+  );
+  const assigneeOptions = useMemo(
+    () => createAssigneeFilterOptions(taskGroups, membersQuery.data ?? []),
+    [membersQuery.data, taskGroups],
+  );
   const selectedTask =
     drawerState?.taskId !== null && drawerState?.taskId !== undefined
-      ? tasks.find((task) => task.id === drawerState.taskId) ?? null
+      ? allTasks.find((task) => task.id === drawerState.taskId) ?? null
       : null;
   const drawerMode = drawerState?.mode ?? "view";
   const drawerInitialStatus =
@@ -129,8 +172,10 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
         : `${drawerState.mode}:${drawerState.taskId}:${selectedTask?.updatedAt ?? "missing"}`;
   const activeDragTask =
     activeDragTaskId !== null
-      ? tasks.find((task) => task.id === activeDragTaskId) ?? null
+      ? allTasks.find((task) => task.id === activeDragTaskId) ?? null
       : null;
+  const canInviteMembers =
+    currentProject?.role === "OWNER" || session?.user.role === "ADMIN";
   const isTaskMutationPending =
     createTaskMutation.isPending ||
     updateTaskMutation.isPending ||
@@ -201,6 +246,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     void queryClient.invalidateQueries({
       queryKey: projectsQueryKey,
     });
+    void queryClient.invalidateQueries({
+      queryKey: ["project", projectId, "activity"],
+    });
   }
 
   async function handleUpdateTask(task: TaskCard, request: UpdateTaskRequest) {
@@ -231,6 +279,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     });
     void queryClient.invalidateQueries({
       queryKey: taskLogsQueryKey(updatedTask.id),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["project", projectId, "activity"],
     });
   }
 
@@ -274,6 +325,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     });
     void queryClient.invalidateQueries({
       queryKey: projectsQueryKey,
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["project", projectId, "activity"],
     });
   }
 
@@ -356,6 +410,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
       void queryClient.invalidateQueries({
         queryKey: taskLogsQueryKey(taskId),
       });
+      void queryClient.invalidateQueries({
+        queryKey: ["project", projectId, "activity"],
+      });
     } catch (error) {
       queryClient.setQueryData<ProjectTasksResponse>(
         projectTasksQueryKey(projectId),
@@ -397,7 +454,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
       return;
     }
 
-    const currentTask = tasks.find((task) => task.id === taskId);
+    const currentTask = allTasks.find((task) => task.id === taskId);
 
     if (!currentTask || currentTask.status === targetStatus) {
       return;
@@ -453,7 +510,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
                   Project board
                 </Badge>
                 <Badge variant="muted" className="px-2">
-                  {tasks.length} cards
+                  {visibleTasks.length} visible
                 </Badge>
               </div>
 
@@ -467,48 +524,78 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
               </div>
             </div>
 
-            <Button
-              type="button"
-              size="sm"
-              className="rounded-md"
-              onClick={() => openCreateTask("TODO")}
-            >
-              <Plus className="size-4" />
-              Create task
-            </Button>
-          </header>
-
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <div className="flex flex-wrap gap-2">
+              {canInviteMembers ? <InviteMemberDialog projectId={projectId} /> : null}
               <Button
                 type="button"
-                variant="outline"
                 size="sm"
-                className="justify-between rounded-md bg-background shadow-none sm:min-w-[10rem]"
+                className="rounded-md"
+                onClick={() => openCreateTask("TODO")}
               >
-                All properties
-                <ChevronDown className="size-4" />
+                <Plus className="size-4" />
+                Create task
               </Button>
+            </div>
+          </header>
 
-              <button
-                type="button"
-                className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md border border-border/70 bg-background px-3 text-left text-sm text-muted-foreground shadow-none transition-colors hover:bg-muted/60 hover:text-foreground sm:min-w-[16rem]"
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_12rem_12rem]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  aria-label="Search board tasks"
+                  className="pl-9"
+                  placeholder="Search title or description"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
+              </div>
+
+              <Select
+                aria-label="Filter tasks by assignee"
+                value={assigneeFilter}
+                onChange={(event) =>
+                  setAssigneeFilter(event.target.value as BoardTaskAssigneeFilter)
+                }
               >
-                <Search className="size-4" />
-                <span className="truncate">Search title, assignee, due date</span>
-              </button>
+                {assigneeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {"count" in option ? `${option.label} (${option.count})` : option.label}
+                  </option>
+                ))}
+              </Select>
+
+              <Select
+                aria-label="Filter tasks by due date"
+                value={dueDateFilter}
+                onChange={(event) =>
+                  setDueDateFilter(event.target.value as BoardTaskDueDateFilter)
+                }
+              >
+                <option value="ALL">All due dates</option>
+                <option value="NO_DUE_DATE">No due date</option>
+                <option value="OVERDUE">Overdue</option>
+                <option value="NEXT_7_DAYS">Next 7 days</option>
+                <option value="FUTURE">Future</option>
+              </Select>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <QuietBoardControl icon={<Filter className="size-4" />} label="Filter" />
-              <QuietBoardControl
-                icon={<LayoutGrid className="size-4" />}
-                label="Group by lane"
-              />
-              <QuietBoardControl
-                icon={<ArrowUpDown className="size-4" />}
-                label="Sort"
-              />
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+              <Badge variant="muted" className="justify-center rounded-md px-3 py-2">
+                Grouped by lane
+              </Badge>
+              <Select
+                aria-label="Sort visible task cards"
+                value={sortOrder}
+                onChange={(event) =>
+                  setSortOrder(event.target.value as BoardTaskSort)
+                }
+              >
+                <option value="DEFAULT">Board order</option>
+                <option value="DUE_DATE">Due date</option>
+                <option value="NEWEST_UPDATED">Newest updated</option>
+                <option value="OLDEST_CREATED">Oldest created</option>
+              </Select>
             </div>
           </div>
 
@@ -566,6 +653,14 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
           </div>
         </CardContent>
       </Card>
+
+      <ProjectActivityFeedCard
+        projectId={projectId}
+        eventType={activityEventType}
+        searchQuery={activitySearchQuery}
+        onEventTypeChange={setActivityEventType}
+        onSearchQueryChange={setActivitySearchQuery}
+      />
 
       <DndContext
         sensors={dragSensors}
@@ -704,26 +799,6 @@ function ProjectBoardErrorState({
         </CardContent>
       </Card>
     </section>
-  );
-}
-
-function QuietBoardControl({
-  icon,
-  label,
-}: {
-  icon: ReactNode;
-  label: string;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      className="rounded-md text-muted-foreground"
-    >
-      {icon}
-      {label}
-    </Button>
   );
 }
 

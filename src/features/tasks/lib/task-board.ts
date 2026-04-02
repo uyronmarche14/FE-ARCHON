@@ -13,6 +13,19 @@ export type BoardMetric = {
   value: string;
 };
 
+export type BoardTaskAssigneeFilter = "ALL" | "UNASSIGNED" | string;
+export type BoardTaskDueDateFilter =
+  | "ALL"
+  | "NO_DUE_DATE"
+  | "OVERDUE"
+  | "NEXT_7_DAYS"
+  | "FUTURE";
+export type BoardTaskSort =
+  | "DEFAULT"
+  | "DUE_DATE"
+  | "NEWEST_UPDATED"
+  | "OLDEST_CREATED";
+
 export const TASK_STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
 
 const BOARD_LANE_CONTENT: Record<
@@ -48,6 +61,72 @@ export function createBoardLanes(taskGroups: TaskGroups): BoardLane[] {
     title: BOARD_LANE_CONTENT[status].title,
     description: BOARD_LANE_CONTENT[status].description,
   }));
+}
+
+export function filterAndSortTaskGroups(
+  taskGroups: TaskGroups,
+  options: {
+    searchQuery: string;
+    assigneeFilter: BoardTaskAssigneeFilter;
+    dueDateFilter: BoardTaskDueDateFilter;
+    sortOrder: BoardTaskSort;
+  },
+): TaskGroups {
+  const normalizedSearchQuery = options.searchQuery.trim().toLowerCase();
+  const nextGroups = createEmptyTaskGroups();
+
+  for (const status of TASK_STATUSES) {
+    nextGroups[status] = sortBoardTasks(
+      taskGroups[status].filter((task) => {
+        if (
+          normalizedSearchQuery.length > 0 &&
+          !`${task.title} ${task.description ?? ""}`
+            .toLowerCase()
+            .includes(normalizedSearchQuery)
+        ) {
+          return false;
+        }
+
+        if (options.assigneeFilter === "UNASSIGNED" && task.assigneeId !== null) {
+          return false;
+        }
+
+        if (
+          options.assigneeFilter !== "ALL" &&
+          options.assigneeFilter !== "UNASSIGNED" &&
+          task.assigneeId !== options.assigneeFilter
+        ) {
+          return false;
+        }
+
+        if (!matchesDueDateFilter(task.dueDate, options.dueDateFilter)) {
+          return false;
+        }
+
+        return true;
+      }),
+      options.sortOrder,
+    );
+  }
+
+  return nextGroups;
+}
+
+export function createAssigneeFilterOptions(
+  taskGroups: TaskGroups,
+  members: Array<{ id: string; name: string }>,
+) {
+  const allTasks = flattenTaskGroups(taskGroups);
+
+  return [
+    { label: "All assignees", value: "ALL" as const },
+    { label: "Unassigned", value: "UNASSIGNED" as const },
+    ...members.map((member) => ({
+      label: member.name,
+      value: member.id,
+      count: allTasks.filter((task) => task.assigneeId === member.id).length,
+    })),
+  ];
 }
 
 export function flattenTaskGroups(taskGroups: TaskGroups) {
@@ -235,8 +314,37 @@ function cloneTaskGroups(taskGroups: TaskGroups) {
   };
 }
 
-function sortBoardTasks(tasks: TaskCard[]) {
+function sortBoardTasks(tasks: TaskCard[], sortOrder: BoardTaskSort = "DEFAULT") {
   return [...tasks].sort((left, right) => {
+    if (sortOrder === "DUE_DATE") {
+      if (left.dueDate && right.dueDate) {
+        return (
+          new Date(`${left.dueDate}T00:00:00.000Z`).getTime() -
+          new Date(`${right.dueDate}T00:00:00.000Z`).getTime()
+        );
+      }
+
+      if (left.dueDate) {
+        return -1;
+      }
+
+      if (right.dueDate) {
+        return 1;
+      }
+    }
+
+    if (sortOrder === "NEWEST_UPDATED") {
+      return (
+        new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+      );
+    }
+
+    if (sortOrder === "OLDEST_CREATED") {
+      return (
+        new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+      );
+    }
+
     if (left.position !== null && right.position !== null) {
       if (left.position !== right.position) {
         return left.position - right.position;
@@ -281,4 +389,41 @@ function formatBoardDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(parsedDate);
+}
+
+function matchesDueDateFilter(
+  dueDate: string | null,
+  filter: BoardTaskDueDateFilter,
+) {
+  if (filter === "ALL") {
+    return true;
+  }
+
+  if (filter === "NO_DUE_DATE") {
+    return dueDate === null;
+  }
+
+  if (dueDate === null) {
+    return false;
+  }
+
+  const taskDueDate = new Date(`${dueDate}T00:00:00.000Z`);
+  const now = new Date();
+  const today = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  const sevenDaysFromToday = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  if (filter === "OVERDUE") {
+    return taskDueDate.getTime() < today.getTime();
+  }
+
+  if (filter === "NEXT_7_DAYS") {
+    return (
+      taskDueDate.getTime() >= today.getTime() &&
+      taskDueDate.getTime() <= sevenDaysFromToday.getTime()
+    );
+  }
+
+  return taskDueDate.getTime() > sevenDaysFromToday.getTime();
 }

@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClientError } from "@/services/http/api-client-error";
+import { AuthSessionProvider } from "@/features/auth/providers/auth-session-provider";
 import { ProjectBoardShell } from "@/features/tasks/components/project-board-shell";
 import { projectsQueryKey } from "@/features/projects/lib/project-query-keys";
 
@@ -127,6 +128,7 @@ vi.mock("lucide-react", () => {
     Layers3: Icon,
     LoaderCircle: Icon,
     MoreHorizontal: Icon,
+    MailPlus: Icon,
     PencilLine: Icon,
     Plus: Icon,
     RefreshCw: Icon,
@@ -147,6 +149,10 @@ vi.mock("@/features/tasks/services/get-project-tasks", () => ({
 
 vi.mock("@/features/projects/services/get-project-detail", () => ({
   getProjectDetail: getProjectDetailMock,
+}));
+
+vi.mock("@/features/projects/components/invite-member-dialog", () => ({
+  InviteMemberDialog: () => <div data-testid="invite-member-dialog" />,
 }));
 
 vi.mock("@/features/tasks/services/get-task-logs", () => ({
@@ -187,7 +193,9 @@ function renderBoard(projectId = "qa-readiness") {
     queryClient,
     ...render(
       <QueryClientProvider client={queryClient}>
-        <ProjectBoardShell projectId={projectId} />
+        <AuthSessionProvider bootstrapSession={false}>
+          <ProjectBoardShell projectId={projectId} />
+        </AuthSessionProvider>
       </QueryClientProvider>,
     ),
   };
@@ -586,7 +594,7 @@ describe("ProjectBoardShell", () => {
 
     expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
     expect(
-      screen.getByText("Search title, assignee, due date"),
+      screen.getByPlaceholderText("Search title or description"),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /create task/i }),
@@ -705,12 +713,11 @@ describe("ProjectBoardShell", () => {
     renderBoard();
 
     expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
-    expect(getProjectDetailMock).toHaveBeenCalledTimes(0);
 
     fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
 
     const createDrawer = await screen.findByRole("dialog", { name: /create task/i });
-    expect(getProjectDetailMock).toHaveBeenCalledTimes(1);
+    expect(getProjectDetailMock).toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText("Task title"), {
       target: { value: "  Prepare   qa wrap-up  " },
@@ -946,7 +953,10 @@ describe("ProjectBoardShell", () => {
     fireEvent.click(getTaskOpenButton("Draft API envelope"));
 
     expect(await screen.findByText(/no activity yet/i)).toBeInTheDocument();
-    expect(getTaskLogsMock).toHaveBeenCalledWith("task-api-envelope");
+    expect(getTaskLogsMock).toHaveBeenCalledWith("task-api-envelope", {
+      page: 1,
+      pageSize: 10,
+    });
   });
 
   it("renders newest-first log history and can retry after a log load error", async () => {
@@ -1032,7 +1042,10 @@ describe("ProjectBoardShell", () => {
     expect(
       await screen.findByText("Member User moved the task from In progress to Done"),
     ).toBeInTheDocument();
-    expect(getTaskLogsMock).toHaveBeenCalledWith("task-refresh-flow");
+    expect(getTaskLogsMock).toHaveBeenCalledWith("task-refresh-flow", {
+      page: 1,
+      pageSize: 10,
+    });
   });
 
   it("stacks all lanes on mobile so every drop target stays visible", async () => {

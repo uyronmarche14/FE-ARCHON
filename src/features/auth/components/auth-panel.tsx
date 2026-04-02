@@ -4,15 +4,23 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, CheckCircle2, LoaderCircle, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  LoaderCircle,
+  MailCheck,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 import { useLogin } from "@/features/auth/hooks/use-login";
-import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
+import { useResendVerification } from "@/features/auth/hooks/use-resend-verification";
 import { useSignup } from "@/features/auth/hooks/use-signup";
 import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
 import type { ApiErrorDetails } from "@/contracts/api";
+import { showApiErrorToast, showInfoToast, showSuccessToast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 import { isApiClientError } from "@/services/http/api-client-error";
 
 type AuthPanelProps = {
@@ -26,6 +34,11 @@ type SignupFormValues = {
 };
 
 type SignupFormErrors = Partial<Record<keyof SignupFormValues, string>>;
+
+type VerificationNotice = {
+  email: string;
+  message: string;
+};
 
 const copyByMode = {
   login: {
@@ -54,21 +67,27 @@ export function AuthPanel({ mode }: AuthPanelProps) {
   const searchParams = useSearchParams();
   const loginMutation = useLogin();
   const signupMutation = useSignup();
+  const resendVerificationMutation = useResendVerification();
   const { setSession } = useAuthSession();
-  const [formValues, setFormValues] = useState<SignupFormValues>({
-    name: "",
-    email: "",
-    password: "",
-  });
-  const [fieldErrors, setFieldErrors] = useState<SignupFormErrors>({});
-  const [formError, setFormError] = useState<string | null>(null);
-
   const nextPath = useMemo(
     () => resolvePostAuthRedirect(searchParams.get("next")),
     [searchParams],
   );
+  const initialEmail = searchParams.get("email")?.trim().toLowerCase() ?? "";
+  const [formValues, setFormValues] = useState<SignupFormValues>({
+    name: "",
+    email: initialEmail,
+    password: "",
+  });
+  const [fieldErrors, setFieldErrors] = useState<SignupFormErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [verificationNotice, setVerificationNotice] =
+    useState<VerificationNotice | null>(null);
 
-  const isSubmitting = loginMutation.isPending || signupMutation.isPending;
+  const isSubmitting =
+    loginMutation.isPending ||
+    signupMutation.isPending ||
+    resendVerificationMutation.isPending;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -90,24 +109,32 @@ export function AuthPanel({ mode }: AuthPanelProps) {
     }
 
     try {
-      const authResponse =
-        mode === "login"
-          ? await loginMutation.mutateAsync({
-              email: normalizedValues.email,
-              password: normalizedValues.password,
-            })
-          : await signupMutation.mutateAsync(normalizedValues);
+      if (mode === "login") {
+        const authResponse = await loginMutation.mutateAsync({
+          email: normalizedValues.email,
+          password: normalizedValues.password,
+        });
 
-      setSession({
-        user: authResponse.user,
-        accessToken: authResponse.accessToken,
+        setSession({
+          user: authResponse.user,
+          accessToken: authResponse.accessToken,
+        });
+
+        showSuccessToast("Logged in", "Welcome back to Archon.");
+        router.replace(nextPath as Route);
+        return;
+      }
+
+      const signupResponse = await signupMutation.mutateAsync({
+        ...normalizedValues,
+        redirectPath: nextPath,
       });
 
-      showSuccessToast(
-        mode === "login" ? "Logged in" : "Account created",
-        mode === "login" ? "Welcome back to Archon." : "Your workspace is ready.",
-      );
-      router.replace(nextPath);
+      setVerificationNotice({
+        email: signupResponse.email,
+        message: signupResponse.message,
+      });
+      showSuccessToast("Check your email", signupResponse.message);
     } catch (error) {
       if (isApiClientError(error)) {
         const nextFieldErrors = mapApiErrorDetailsToFormErrors(error.details);
@@ -117,6 +144,13 @@ export function AuthPanel({ mode }: AuthPanelProps) {
         }
 
         setFormError(error.message);
+
+        if (requiresVerification(error.details)) {
+          setVerificationNotice({
+            email: normalizedValues.email,
+            message: "Verification is still pending for this account.",
+          });
+        }
       } else {
         setFormError(
           mode === "login"
@@ -131,6 +165,20 @@ export function AuthPanel({ mode }: AuthPanelProps) {
           ? "Unable to log you in right now."
           : "Unable to create your account right now.",
       );
+    }
+  }
+
+  async function handleResendVerification() {
+    const email = verificationNotice?.email ?? formValues.email.trim().toLowerCase();
+
+    try {
+      const resendResponse = await resendVerificationMutation.mutateAsync({
+        email,
+        redirectPath: nextPath,
+      });
+      showInfoToast("Verification email resent", resendResponse.message);
+    } catch (error) {
+      showApiErrorToast(error, "Unable to resend the verification email.");
     }
   }
 
@@ -172,12 +220,14 @@ export function AuthPanel({ mode }: AuthPanelProps) {
 
           <div>
             <p className="text-[11px] font-semibold tracking-[0.26em] text-muted-foreground uppercase">
-              {copy.eyebrow}
+              {verificationNotice ? "Verify email" : copy.eyebrow}
             </p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-              {copy.title}
+              {verificationNotice ? "Check your inbox" : copy.title}
             </h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.description}</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {verificationNotice ? verificationNotice.message : copy.description}
+            </p>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               {copy.footerLabel}{" "}
               <Link className="font-semibold text-primary hover:underline" href={copy.footerHref}>
@@ -187,117 +237,177 @@ export function AuthPanel({ mode }: AuthPanelProps) {
           </div>
         </div>
 
-        <form className="space-y-3.5" onSubmit={handleSubmit}>
-          <Button
-            variant="outline"
-            type="button"
-            className="h-11 w-full justify-center rounded-[8px] border-border/80 bg-background text-foreground shadow-none"
-          >
-            <GoogleIcon className="size-4" />
-            Continue with Google
-          </Button>
-
-          <div className="flex items-center gap-3 py-1 text-xs uppercase">
-            <span className="h-px flex-1 bg-border/70" />
-            <span className="tracking-[0.22em] text-muted-foreground">Or</span>
-            <span className="h-px flex-1 bg-border/70" />
-          </div>
-
-          {mode === "signup" ? (
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium">Full name</span>
-              <Input
-                placeholder="Jane Doe"
-                className="h-11 rounded-[8px] border-border/80 bg-background px-4 shadow-none"
-                value={formValues.name}
-                onChange={(event) => handleInputChange("name", event.target.value)}
-              />
-              {fieldErrors.name ? (
-                <p className="text-xs text-destructive">{fieldErrors.name}</p>
-              ) : null}
-            </label>
-          ) : null}
-
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium">Email</span>
-            <Input
-              placeholder="jane@example.com"
-              type="email"
-              className="h-11 rounded-[8px] border-border/80 bg-background px-4 shadow-none"
-              value={formValues.email}
-              onChange={(event) => handleInputChange("email", event.target.value)}
-            />
-            {fieldErrors.email ? (
-              <p className="text-xs text-destructive">{fieldErrors.email}</p>
-            ) : null}
-          </label>
-
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium">Password</span>
-            <Input
-              placeholder="StrongPassword123"
-              type="password"
-              className="h-11 rounded-[8px] border-border/80 bg-background px-4 shadow-none"
-              value={formValues.password}
-              onChange={(event) => handleInputChange("password", event.target.value)}
-            />
-            {fieldErrors.password ? (
-              <p className="text-xs text-destructive">{fieldErrors.password}</p>
-            ) : null}
-          </label>
-
-          {mode === "signup" ? (
-            <div className="rounded-[8px] bg-muted/45 px-4 py-3">
-              <div className="mb-2 flex items-center gap-2">
-                <CheckCircle2 className="size-4 text-primary" />
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Ready already
-                </p>
+        {verificationNotice ? (
+          <div className="space-y-4">
+            <div className="rounded-[8px] border border-primary/15 bg-primary/5 px-4 py-4">
+              <div className="flex items-start gap-3">
+                <MailCheck className="mt-0.5 size-5 text-primary" />
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-foreground">
+                    Verification email sent to {verificationNotice.email}
+                  </p>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Open the email, confirm the account, and we&apos;ll send you back into the right flow.
+                  </p>
+                </div>
               </div>
-              <p className="text-xs leading-6 text-muted-foreground">
-                Shared query provider, Axios client, request error normalization, and session
-                bootstrap wiring are already in place.
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  void handleResendVerification();
+                }}
+                disabled={resendVerificationMutation.isPending}
+              >
+                {resendVerificationMutation.isPending ? (
+                  <>
+                    <LoaderCircle className="size-4 animate-spin" />
+                    Resending
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="size-4" />
+                    Resend email
+                  </>
+                )}
+              </Button>
+              <Button asChild className="flex-1">
+                <Link href={`/login?next=${encodeURIComponent(nextPath)}`}>
+                  Continue to login
+                </Link>
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <form className="space-y-3.5" onSubmit={handleSubmit}>
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                type="button"
+                className="h-11 w-full justify-center rounded-[8px] border-border/80 bg-background text-foreground shadow-none"
+                onClick={() =>
+                  showInfoToast(
+                    "Google sign-in is not available",
+                    "This build currently supports email and password authentication only.",
+                  )
+                }
+              >
+                <GoogleIcon className="size-4" />
+                Google sign-in unavailable
+              </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                This assessment build does not include Google OAuth yet.
               </p>
             </div>
-          ) : (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Forgot password?
-              </button>
-            </div>
-          )}
 
-          {formError ? (
-            <div className="rounded-[8px] border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              {formError}
+            <div className="flex items-center gap-3 py-1 text-xs uppercase">
+              <span className="h-px flex-1 bg-border/70" />
+              <span className="tracking-[0.22em] text-muted-foreground">Or</span>
+              <span className="h-px flex-1 bg-border/70" />
             </div>
-          ) : null}
 
-          <Button
-            size="lg"
-            type="submit"
-            disabled={isSubmitting}
-            className={cn(
-              "mt-1.5 h-11 w-full rounded-[8px] text-sm font-semibold shadow-[0_12px_24px_rgba(53,64,209,0.22)]",
-              mode === "login" && "bg-primary hover:bg-primary/90",
-            )}
-          >
-            {isSubmitting ? (
-              <>
-                <LoaderCircle className="size-4 animate-spin" />
-                {mode === "login" ? "Signing in" : "Creating account"}
-              </>
+            {mode === "signup" ? (
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium">Full name</span>
+                <Input
+                  placeholder="Jane Doe"
+                  autoComplete="name"
+                  className="h-11 rounded-[8px] border-border/80 bg-background px-4 shadow-none"
+                  value={formValues.name}
+                  onChange={(event) => handleInputChange("name", event.target.value)}
+                />
+                {fieldErrors.name ? (
+                  <p className="text-xs text-destructive">{fieldErrors.name}</p>
+                ) : null}
+              </label>
+            ) : null}
+
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium">Email</span>
+              <Input
+                placeholder="jane@example.com"
+                type="email"
+                autoComplete="email"
+                className="h-11 rounded-[8px] border-border/80 bg-background px-4 shadow-none"
+                value={formValues.email}
+                onChange={(event) => handleInputChange("email", event.target.value)}
+              />
+              {fieldErrors.email ? (
+                <p className="text-xs text-destructive">{fieldErrors.email}</p>
+              ) : null}
+            </label>
+
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium">Password</span>
+              <Input
+                placeholder="StrongPassword123"
+                type="password"
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                className="h-11 rounded-[8px] border-border/80 bg-background px-4 shadow-none"
+                value={formValues.password}
+                onChange={(event) => handleInputChange("password", event.target.value)}
+              />
+              {fieldErrors.password ? (
+                <p className="text-xs text-destructive">{fieldErrors.password}</p>
+              ) : null}
+            </label>
+
+            {mode === "signup" ? (
+              <div className="rounded-[8px] bg-muted/45 px-4 py-3">
+                <div className="mb-2 flex items-center gap-2">
+                  <CheckCircle2 className="size-4 text-primary" />
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Verification required
+                  </p>
+                </div>
+                <p className="text-xs leading-6 text-muted-foreground">
+                  New accounts confirm ownership through an email link before protected workspace access is allowed.
+                </p>
+              </div>
             ) : (
-              <>
-                {copy.cta}
-                <ArrowRight className="size-4" />
-              </>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Forgot password?
+                </button>
+              </div>
             )}
-          </Button>
-        </form>
+
+            {formError ? (
+              <div className="rounded-[8px] border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                {formError}
+              </div>
+            ) : null}
+
+            <Button
+              size="lg"
+              type="submit"
+              disabled={isSubmitting}
+              className={cn(
+                "mt-1.5 h-11 w-full rounded-[8px] text-sm font-semibold shadow-[0_12px_24px_rgba(53,64,209,0.22)]",
+                mode === "login" && "bg-primary hover:bg-primary/90",
+              )}
+            >
+              {isSubmitting ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  {mode === "login" ? "Signing in" : "Creating account"}
+                </>
+              ) : (
+                <>
+                  {copy.cta}
+                  <ArrowRight className="size-4" />
+                </>
+              )}
+            </Button>
+          </form>
+        )}
       </section>
     </main>
   );
@@ -376,7 +486,7 @@ function mapApiErrorDetailsToFormErrors(details: ApiErrorDetails | undefined) {
   for (const field of ["name", "email", "password"] as const) {
     const value = details[field];
 
-    if (Array.isArray(value) && value[0]) {
+    if (Array.isArray(value) && typeof value[0] === "string" && value[0]) {
       nextErrors[field] = value[0];
     } else if (typeof value === "string" && value.length > 0) {
       nextErrors[field] = value;
@@ -386,10 +496,14 @@ function mapApiErrorDetailsToFormErrors(details: ApiErrorDetails | undefined) {
   return nextErrors;
 }
 
-function resolvePostAuthRedirect(nextPath: string | null): Route {
+function requiresVerification(details: ApiErrorDetails | undefined) {
+  return details?.needsVerification === true;
+}
+
+function resolvePostAuthRedirect(nextPath: string | null): string {
   if (!nextPath || !nextPath.startsWith("/") || nextPath.startsWith("//")) {
     return "/app";
   }
 
-  return nextPath as Route;
+  return nextPath;
 }

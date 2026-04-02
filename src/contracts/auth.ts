@@ -3,6 +3,7 @@ export type AuthUser = {
   name: string;
   email: string;
   role: "ADMIN" | "MEMBER";
+  emailVerifiedAt: string | null;
 };
 
 export type AuthSessionResponse = {
@@ -14,6 +15,7 @@ export type SignupRequest = {
   name: string;
   email: string;
   password: string;
+  redirectPath?: string;
 };
 
 export type LoginRequest = {
@@ -21,7 +23,11 @@ export type LoginRequest = {
   password: string;
 };
 
-export type SignupResponse = AuthSessionResponse;
+export type SignupResponse = {
+  message: string;
+  email: string;
+  emailVerificationRequired: true;
+};
 
 export type LoginResponse = AuthSessionResponse;
 
@@ -35,4 +41,23 @@ export type AuthRefreshResponse = {
 
 export type LogoutResponse = {
   loggedOut: true;
+};
+
+export type VerifyEmailConfirmRequest = {
+  token: string;
+};
+
+export type VerifyEmailConfirmResponse = {
+  verified: true;
+  email: string;
+  redirectPath: string | null;
+};
+
+export type ResendVerificationRequest = {
+  email: string;
+  redirectPath?: string;
+};
+
+export type ResendVerificationResponse = {
+  message: string;
 };

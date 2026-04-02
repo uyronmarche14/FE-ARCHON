@@ -3,7 +3,10 @@ export type ApiMeta = {
   timestamp: string;
 };
 
-export type ApiErrorDetails = Record<string, string[] | string>;
+export type ApiErrorDetails = Record<
+  string,
+  string[] | string | boolean | number | null
+>;
 
 export type ApiErrorPayload = {
   code: string;

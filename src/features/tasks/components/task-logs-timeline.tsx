@@ -1,22 +1,34 @@
 "use client";
 
 import { AlertTriangle, Clock3, RefreshCw } from "lucide-react";
-import type { TaskLogEntry, TaskLogValue } from "@/contracts/tasks";
+import type { TaskLogEntry } from "@/contracts/tasks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  formatTaskActivityTimestamp,
+  formatTaskActivityValue,
+  getTaskActivityEventLabel,
+  getTaskActivityFieldLabel,
+} from "@/features/tasks/lib/task-activity-format";
 
 type TaskLogsTimelineProps = {
   entries: TaskLogEntry[];
   errorMessage?: string | null;
+  hasMore?: boolean;
+  isFetchingMore?: boolean;
   isLoading?: boolean;
+  onLoadMore?: () => void;
   onRetry?: () => void;
 };
 
 export function TaskLogsTimeline({
   entries,
   errorMessage,
+  hasMore = false,
+  isFetchingMore = false,
   isLoading = false,
+  onLoadMore,
   onRetry,
 }: TaskLogsTimelineProps) {
   return (
@@ -88,11 +100,11 @@ export function TaskLogsTimeline({
                 <div className="min-w-0 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={getEventBadgeVariant(entry.eventType)}>
-                      {getEventLabel(entry.eventType)}
+                      {getTaskActivityEventLabel(entry.eventType)}
                     </Badge>
                     {entry.fieldName ? (
                       <Badge variant="outline" className="normal-case tracking-normal">
-                        {getFieldLabel(entry.fieldName)}
+                        {getTaskActivityFieldLabel(entry.fieldName)}
                       </Badge>
                     ) : null}
                   </div>
@@ -107,7 +119,7 @@ export function TaskLogsTimeline({
                 </div>
                 <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock3 className="size-3.5" />
-                  {formatTaskLogTimestamp(entry.createdAt)}
+                  {formatTaskActivityTimestamp(entry.createdAt)}
                 </div>
               </div>
 
@@ -118,13 +130,13 @@ export function TaskLogsTimeline({
                   </p>
                   <div className="mt-2 grid gap-2 text-sm sm:grid-cols-[1fr_auto_1fr] sm:items-center">
                     <span className="rounded-sm bg-background px-2.5 py-1.5 text-foreground">
-                      {formatTaskLogValue(entry.fieldName, entry.oldValue)}
+                      {formatTaskActivityValue(entry.fieldName, entry.oldValue)}
                     </span>
                     <span className="text-center text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">
                       to
                     </span>
                     <span className="rounded-sm bg-background px-2.5 py-1.5 text-foreground">
-                      {formatTaskLogValue(entry.fieldName, entry.newValue)}
+                      {formatTaskActivityValue(entry.fieldName, entry.newValue)}
                     </span>
                   </div>
                 </div>
@@ -132,6 +144,26 @@ export function TaskLogsTimeline({
             </li>
           ))}
         </ol>
+      ) : null}
+
+      {!isLoading && !errorMessage && entries.length > 0 && hasMore && onLoadMore ? (
+        <div className="flex justify-start">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onLoadMore}
+            disabled={isFetchingMore}
+          >
+            {isFetchingMore ? (
+              <>
+                <RefreshCw className="size-3.5 animate-spin" />
+                Loading more
+              </>
+            ) : (
+              "Load more activity"
+            )}
+          </Button>
+        </div>
       ) : null}
     </section>
   );
@@ -146,18 +178,6 @@ function TaskLogsTimelineLoadingState() {
   );
 }
 
-function getEventLabel(eventType: TaskLogEntry["eventType"]) {
-  if (eventType === "TASK_UPDATED") {
-    return "Updated";
-  }
-
-  if (eventType === "STATUS_CHANGED") {
-    return "Moved";
-  }
-
-  return "Created";
-}
-
 function getEventBadgeVariant(eventType: TaskLogEntry["eventType"]) {
   if (eventType === "STATUS_CHANGED") {
     return "progress" as const;
@@ -168,87 +188,4 @@ function getEventBadgeVariant(eventType: TaskLogEntry["eventType"]) {
   }
 
   return "done" as const;
-}
-
-function getFieldLabel(fieldName: string) {
-  if (fieldName === "assigneeId") {
-    return "Assignee";
-  }
-
-  if (fieldName === "dueDate") {
-    return "Due date";
-  }
-
-  if (fieldName === "description") {
-    return "Description";
-  }
-
-  if (fieldName === "status") {
-    return "Status";
-  }
-
-  return "Title";
-}
-
-function formatTaskLogValue(fieldName: string, value: TaskLogValue) {
-  if (fieldName === "status" && typeof value === "string") {
-    if (value === "IN_PROGRESS") {
-      return "In progress";
-    }
-
-    if (value === "DONE") {
-      return "Done";
-    }
-
-    return "Todo";
-  }
-
-  if (fieldName === "dueDate") {
-    return typeof value === "string" ? formatTaskLogDate(value) : "No due date";
-  }
-
-  if (fieldName === "description") {
-    return typeof value === "string" && value.length > 0 ? value : "No description";
-  }
-
-  if (fieldName === "assigneeId") {
-    return isTaskLogAssigneeValue(value) ? value.name : "Unassigned";
-  }
-
-  if (value === null) {
-    return "Empty";
-  }
-
-  return String(value);
-}
-
-function formatTaskLogTimestamp(createdAt: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    timeZone: "UTC",
-  }).format(new Date(createdAt));
-}
-
-function formatTaskLogDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-    year: "numeric",
-  }).format(new Date(`${value}T00:00:00.000Z`));
-}
-
-function isTaskLogAssigneeValue(value: TaskLogValue): value is {
-  id: string;
-  name: string;
-} {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "id" in value &&
-    "name" in value
-  );
 }
