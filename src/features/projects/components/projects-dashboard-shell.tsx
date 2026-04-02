@@ -111,7 +111,7 @@ export function ProjectsDashboardShell() {
             ) : null}
           </div>
 
-          {projectsQuery.isPending ? <DashboardLoadingState /> : null}
+          {projectsQuery.isPending ? <ProjectsDashboardLoadingState /> : null}
 
           {projectsQuery.isError ? (
             <Card className="border-border/70 bg-surface-subtle shadow-none">
@@ -131,7 +131,7 @@ export function ProjectsDashboardShell() {
                   onClick={() => void projectsQuery.refetch()}
                 >
                   <RefreshCcw className="size-4" />
-                  Retry
+                  Retry loading projects
                 </Button>
               </CardContent>
             </Card>
@@ -200,7 +200,7 @@ function DashboardMetricTile({
   );
 }
 
-function DashboardLoadingState() {
+export function ProjectsDashboardLoadingState() {
   return (
     <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3" aria-label="Loading projects">
       {Array.from({ length: 6 }).map((_, index) => (

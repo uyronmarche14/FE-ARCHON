@@ -75,7 +75,7 @@ export function ProjectsSidebarNavigation({
           >
             <RefreshCcw className="size-4" />
             <span className="group-data-[state=collapsed]/sidebar:hidden">
-              Retry
+              Retry loading projects
             </span>
           </Button>
         </div>

@@ -621,7 +621,11 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
   );
 }
 
-function ProjectBoardLoadingState({ projectName }: { projectName: string }) {
+export function ProjectBoardLoadingState({
+  projectName,
+}: {
+  projectName: string;
+}) {
   return (
     <section aria-label="Loading project tasks" className="space-y-4">
       <Card className="overflow-hidden border-border/70 bg-card shadow-sm">
