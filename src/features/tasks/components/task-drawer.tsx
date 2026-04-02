@@ -14,7 +14,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useProjectMembers } from "@/features/tasks/hooks/use-project-members";
+import { useTaskLogs } from "@/features/tasks/hooks/use-task-logs";
 import { TaskForm } from "@/features/tasks/components/task-form";
+import { TaskLogsTimeline } from "@/features/tasks/components/task-logs-timeline";
 import { TaskPreviewPanel } from "@/features/tasks/components/task-preview-panel";
 import {
   buildUpdateTaskRequest,
@@ -60,6 +62,10 @@ export function TaskDrawer({
   onUpdate,
 }: TaskDrawerProps) {
   const membersQuery = useProjectMembers(projectId, open && mode !== "view");
+  const taskLogsQuery = useTaskLogs(
+    task?.id ?? "",
+    open && mode === "view" && task !== null,
+  );
   const [formValues, setFormValues] = useState<TaskFormValues>(
     createTaskFormValues(initialStatus, task),
   );
@@ -225,6 +231,14 @@ export function TaskDrawer({
         {mode === "view" && task ? (
           <div className="grid gap-4">
             <TaskPreviewPanel task={task} presentation="sheet" />
+            <TaskLogsTimeline
+              entries={taskLogsQuery.data?.items ?? []}
+              isLoading={taskLogsQuery.isPending}
+              errorMessage={taskLogsQuery.isError ? "Try the request again to load the latest task history." : null}
+              onRetry={() => {
+                void taskLogsQuery.refetch();
+              }}
+            />
 
             {confirmDelete ? (
               <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-4">

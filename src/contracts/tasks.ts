@@ -42,3 +42,33 @@ export type UpdateTaskStatusRequest = {
 export type DeleteTaskResponse = {
   message: string;
 };
+
+export type TaskLogEventType =
+  | "TASK_CREATED"
+  | "TASK_UPDATED"
+  | "STATUS_CHANGED";
+
+export type TaskLogAssigneeValue = {
+  id: string;
+  name: string;
+};
+
+export type TaskLogValue = string | number | boolean | TaskLogAssigneeValue | null;
+
+export type TaskLogEntry = {
+  id: string;
+  eventType: TaskLogEventType;
+  fieldName: string | null;
+  oldValue: TaskLogValue;
+  newValue: TaskLogValue;
+  summary: string;
+  actor: {
+    id: string;
+    name: string;
+  };
+  createdAt: string;
+};
+
+export type TaskLogsResponse = {
+  items: TaskLogEntry[];
+};

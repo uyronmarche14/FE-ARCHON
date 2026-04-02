@@ -15,6 +15,7 @@ import { projectsQueryKey } from "@/features/projects/lib/project-query-keys";
 const getProjectsMock = vi.hoisted(() => vi.fn());
 const getProjectTasksMock = vi.hoisted(() => vi.fn());
 const getProjectDetailMock = vi.hoisted(() => vi.fn());
+const getTaskLogsMock = vi.hoisted(() => vi.fn());
 const createTaskMock = vi.hoisted(() => vi.fn());
 const updateTaskMock = vi.hoisted(() => vi.fn());
 const patchTaskStatusMock = vi.hoisted(() => vi.fn());
@@ -117,6 +118,7 @@ vi.mock("lucide-react", () => {
     AlertTriangle: Icon,
     ArrowUpDown: Icon,
     CalendarClock: Icon,
+    Clock3: Icon,
     ChevronDown: Icon,
     CircleCheckBig: Icon,
     Filter: Icon,
@@ -127,6 +129,7 @@ vi.mock("lucide-react", () => {
     MoreHorizontal: Icon,
     PencilLine: Icon,
     Plus: Icon,
+    RefreshCw: Icon,
     Search: Icon,
     Trash2: Icon,
     UserRound: Icon,
@@ -144,6 +147,10 @@ vi.mock("@/features/tasks/services/get-project-tasks", () => ({
 
 vi.mock("@/features/projects/services/get-project-detail", () => ({
   getProjectDetail: getProjectDetailMock,
+}));
+
+vi.mock("@/features/tasks/services/get-task-logs", () => ({
+  getTaskLogs: getTaskLogsMock,
 }));
 
 vi.mock("@/features/tasks/services/create-task", () => ({
@@ -256,6 +263,19 @@ type TaskState = Array<{
 }>;
 
 let taskState: TaskState = [];
+let taskLogState: Record<string, Array<{
+  id: string;
+  eventType: "TASK_CREATED" | "TASK_UPDATED" | "STATUS_CHANGED";
+  fieldName: string | null;
+  oldValue: string | { id: string; name: string } | null;
+  newValue: string | { id: string; name: string } | null;
+  summary: string;
+  actor: {
+    id: string;
+    name: string;
+  };
+  createdAt: string;
+}>> = {};
 
 function createTaskGroupsFromState(tasks: TaskState) {
   return {
@@ -277,6 +297,18 @@ function createProjectSummaryFromTasks(tasks: TaskState) {
       DONE: tasks.filter((task) => task.status === "DONE").length,
     },
   };
+}
+
+function formatTaskStatusLabel(status: "TODO" | "IN_PROGRESS" | "DONE") {
+  if (status === "IN_PROGRESS") {
+    return "In progress";
+  }
+
+  if (status === "DONE") {
+    return "Done";
+  }
+
+  return "Todo";
 }
 
 describe("ProjectBoardShell", () => {
@@ -309,10 +341,12 @@ describe("ProjectBoardShell", () => {
         updatedAt: "2026-04-02T10:00:00.000Z",
       },
     ];
+    taskLogState = {};
 
     getProjectsMock.mockReset();
     getProjectTasksMock.mockReset();
     getProjectDetailMock.mockReset();
+    getTaskLogsMock.mockReset();
     createTaskMock.mockReset();
     updateTaskMock.mockReset();
     patchTaskStatusMock.mockReset();
@@ -345,6 +379,9 @@ describe("ProjectBoardShell", () => {
       ],
       taskGroups: createTaskGroupsFromState(taskState),
     });
+    getTaskLogsMock.mockImplementation(async (taskId: string) => ({
+      items: taskLogState[taskId] ?? [],
+    }));
     createTaskMock.mockImplementation(
       async (
         projectId: string,
@@ -370,6 +407,24 @@ describe("ProjectBoardShell", () => {
         };
 
         taskState = [...taskState, createdTask];
+        taskLogState = {
+          ...taskLogState,
+          [createdTask.id]: [
+            {
+              id: `log-${createdTask.id}-created`,
+              eventType: "TASK_CREATED",
+              fieldName: null,
+              oldValue: null,
+              newValue: null,
+              summary: "Member User created the task",
+              actor: {
+                id: "member-1",
+                name: "Member User",
+              },
+              createdAt: "2026-04-04T09:00:00.000Z",
+            },
+          ],
+        };
 
         return createdTask;
       },
@@ -399,6 +454,25 @@ describe("ProjectBoardShell", () => {
         taskState = taskState.map((task) =>
           task.id === taskId ? updatedTask : task,
         );
+        taskLogState = {
+          ...taskLogState,
+          [taskId]: [
+            {
+              id: `log-${taskId}-${(taskLogState[taskId]?.length ?? 0) + 1}`,
+              eventType: "TASK_UPDATED",
+              fieldName: "title",
+              oldValue: existingTask.title,
+              newValue: request.title ?? existingTask.title,
+              summary: "Member User updated the title",
+              actor: {
+                id: "member-1",
+                name: "Member User",
+              },
+              createdAt: "2026-04-05T09:00:00.000Z",
+            },
+            ...(taskLogState[taskId] ?? []),
+          ],
+        };
 
         return updatedTask;
       },
@@ -424,6 +498,25 @@ describe("ProjectBoardShell", () => {
         taskState = taskState.map((task) =>
           task.id === taskId ? updatedTask : task,
         );
+        taskLogState = {
+          ...taskLogState,
+          [taskId]: [
+            {
+              id: `log-${taskId}-status-${(taskLogState[taskId]?.length ?? 0) + 1}`,
+              eventType: "STATUS_CHANGED",
+              fieldName: "status",
+              oldValue: existingTask.status,
+              newValue: request.status,
+              summary: `Member User moved the task from ${formatTaskStatusLabel(existingTask.status)} to ${formatTaskStatusLabel(request.status)}`,
+              actor: {
+                id: "member-1",
+                name: "Member User",
+              },
+              createdAt: "2026-04-06T09:00:00.000Z",
+            },
+            ...(taskLogState[taskId] ?? []),
+          ],
+        };
 
         return updatedTask;
       },
@@ -837,6 +930,109 @@ describe("ProjectBoardShell", () => {
       await screen.findByText("Task title must be 160 characters or fewer."),
     ).toBeInTheDocument();
     expect(toastMocks.showApiErrorToast).not.toHaveBeenCalled();
+  });
+
+  it("loads logs only in view mode and shows an empty state when none exist", async () => {
+    renderBoard();
+
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
+    expect(getTaskLogsMock).toHaveBeenCalledTimes(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+    expect(await screen.findByRole("dialog", { name: /create task/i })).toBeInTheDocument();
+    expect(getTaskLogsMock).toHaveBeenCalledTimes(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    fireEvent.click(getTaskOpenButton("Draft API envelope"));
+
+    expect(await screen.findByText(/no activity yet/i)).toBeInTheDocument();
+    expect(getTaskLogsMock).toHaveBeenCalledWith("task-api-envelope");
+  });
+
+  it("renders newest-first log history and can retry after a log load error", async () => {
+    taskLogState["task-refresh-flow"] = [
+      {
+        id: "log-status",
+        eventType: "STATUS_CHANGED",
+        fieldName: "status",
+        oldValue: "TODO",
+        newValue: "IN_PROGRESS",
+        summary: "Member User moved the task from Todo to In progress",
+        actor: {
+          id: "member-1",
+          name: "Member User",
+        },
+        createdAt: "2026-04-06T09:00:00.000Z",
+      },
+      {
+        id: "log-created",
+        eventType: "TASK_CREATED",
+        fieldName: null,
+        oldValue: null,
+        newValue: null,
+        summary: "Member User created the task",
+        actor: {
+          id: "member-1",
+          name: "Member User",
+        },
+        createdAt: "2026-04-02T09:00:00.000Z",
+      },
+    ];
+    getTaskLogsMock
+      .mockRejectedValueOnce(new Error("History failed"))
+      .mockImplementation(async (taskId: string) => ({
+        items: taskLogState[taskId] ?? [],
+      }));
+
+    renderBoard();
+
+    expect(await findTaskOpenButton("Wire refresh token flow")).toBeInTheDocument();
+
+    fireEvent.click(getTaskOpenButton("Wire refresh token flow"));
+
+    expect(
+      await screen.findByText(/we couldn't load the activity log/i),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /retry loading logs/i }));
+
+    expect(
+      await screen.findByText("Member User moved the task from Todo to In progress"),
+    ).toBeInTheDocument();
+
+    const logItems = screen.getAllByRole("listitem");
+    expect(logItems[0]).toHaveTextContent("Member User moved the task from Todo to In progress");
+    expect(logItems[1]).toHaveTextContent("Member User created the task");
+  });
+
+  it("refreshes log history after edit and status mutations", async () => {
+    taskLogState["task-refresh-flow"] = [];
+
+    renderBoard();
+
+    expect(await findTaskOpenButton("Wire refresh token flow")).toBeInTheDocument();
+
+    fireEvent.click(getTaskOpenButton("Wire refresh token flow"));
+    expect(await screen.findByText(/no activity yet/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit task/i }));
+    fireEvent.change(screen.getByLabelText("Task title"), {
+      target: { value: "Wire refresh token flow safely" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    expect(
+      await screen.findByText("Member User updated the title"),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      dndMock.triggerDragEnd("task-refresh-flow", "DONE");
+    });
+
+    expect(
+      await screen.findByText("Member User moved the task from In progress to Done"),
+    ).toBeInTheDocument();
+    expect(getTaskLogsMock).toHaveBeenCalledWith("task-refresh-flow");
   });
 
   it("stacks all lanes on mobile so every drop target stays visible", async () => {

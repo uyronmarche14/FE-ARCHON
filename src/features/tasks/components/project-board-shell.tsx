@@ -66,7 +66,10 @@ import {
   TASK_STATUSES,
   updateTaskInGroups,
 } from "@/features/tasks/lib/task-board";
-import { projectTasksQueryKey } from "@/features/tasks/lib/task-query-keys";
+import {
+  projectTasksQueryKey,
+  taskLogsQueryKey,
+} from "@/features/tasks/lib/task-query-keys";
 import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
@@ -226,6 +229,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     void queryClient.invalidateQueries({
       queryKey: projectTasksQueryKey(projectId),
     });
+    void queryClient.invalidateQueries({
+      queryKey: taskLogsQueryKey(updatedTask.id),
+    });
   }
 
   async function handleDeleteTask(task: TaskCard) {
@@ -346,6 +352,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
       });
       void queryClient.invalidateQueries({
         queryKey: projectDetailQueryKey(projectId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: taskLogsQueryKey(taskId),
       });
     } catch (error) {
       queryClient.setQueryData<ProjectTasksResponse>(
