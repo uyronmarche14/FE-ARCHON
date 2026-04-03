@@ -7,8 +7,15 @@ vi.mock("lucide-react", () => {
 
   return {
     AlertTriangle: Icon,
+    ArrowRight: Icon,
+    CalendarClock: Icon,
     Clock3: Icon,
+    FileText: Icon,
+    Layers3: Icon,
+    PencilLine: Icon,
     RefreshCw: Icon,
+    Sparkles: Icon,
+    UserRound: Icon,
   };
 });
 

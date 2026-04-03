@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import type { Route } from "next";
 import Link from "next/link";
-import { FolderKanban, Plus, RefreshCcw } from "lucide-react";
+import { ArrowRight, FolderKanban, Plus, RefreshCcw } from "lucide-react";
 import { WorkspaceSectionHeader } from "@/components/shared/workspace-section-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,13 +50,18 @@ export function ProjectsDashboardShell() {
 
   return (
     <section className="space-y-5">
-      <Card className="border-border/70 bg-card shadow-sm">
-        <CardContent className="space-y-4 px-4 py-4 sm:px-5">
+      <Card className="overflow-hidden border-border/70 bg-card/98">
+        <CardContent className="space-y-4 bg-linear-to-b from-background via-background to-surface-subtle/45 px-4 py-4 sm:px-5 sm:py-5">
           <WorkspaceSectionHeader
             badge={
-              <Badge variant="outline" className="bg-surface-subtle">
-                Workspace overview
-              </Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" size="xs" className="bg-background/90">
+                  Workspace overview
+                </Badge>
+                <Badge variant="muted" size="xs">
+                  {projects.length} visible
+                </Badge>
+              </div>
             }
             title="Projects ready for the next move."
             description="Keep the workspace simple, check progress at a glance, and jump straight into a board when you need it."
@@ -97,24 +102,33 @@ export function ProjectsDashboardShell() {
         </CardContent>
       </Card>
 
-      <Card className="border-border/70 bg-card shadow-sm">
-        <CardContent className="space-y-4 px-4 py-4 sm:px-5">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold tracking-tight">Projects</p>
-              <p className="text-sm text-muted-foreground">
-                A simple list of workspaces you can open and continue from here.
-              </p>
+      <Card className="overflow-hidden border-border/70 bg-card/98">
+        <CardContent className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" size="xs">
+                  Project list
+                </Badge>
+                {!projectsQuery.isPending && !projectsQuery.isError && projects.length > 0 ? (
+                  <Badge variant="muted" size="xs">
+                    {projects.length} visible
+                  </Badge>
+                ) : null}
+              </div>
+              <div className="space-y-1">
+                <p className="text-lg font-semibold tracking-tight">Projects</p>
+                <p className="text-sm leading-5 text-muted-foreground">
+                  Open a workspace directly and keep the dashboard focused on quick scanning.
+                </p>
+              </div>
             </div>
-            {!projectsQuery.isPending && !projectsQuery.isError && projects.length > 0 ? (
-              <Badge variant="muted">{projects.length} visible</Badge>
-            ) : null}
           </div>
 
           {projectsQuery.isPending ? <ProjectsDashboardLoadingState /> : null}
 
-          {projectsQuery.isError ? (
-            <Card className="border-border/70 bg-surface-subtle shadow-none">
+          {!projectsQuery.isPending && projectsQuery.isError ? (
+            <Card className="border-border/70 bg-surface-subtle/60 shadow-none">
               <CardContent className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-base font-semibold">
@@ -128,7 +142,9 @@ export function ProjectsDashboardShell() {
                   variant="outline"
                   size="sm"
                   className="rounded-xl"
-                  onClick={() => void projectsQuery.refetch()}
+                  onClick={() => {
+                    void projectsQuery.refetch();
+                  }}
                 >
                   <RefreshCcw className="size-4" />
                   Retry loading projects
@@ -140,9 +156,9 @@ export function ProjectsDashboardShell() {
           {!projectsQuery.isPending &&
           !projectsQuery.isError &&
           projects.length === 0 ? (
-            <Card className="border-dashed border-border/80 bg-surface-subtle shadow-none">
+            <Card className="border-dashed border-border/80 bg-surface-subtle/50 shadow-none">
               <CardContent className="px-5 py-8 text-center">
-                <div className="mx-auto grid size-12 place-items-center rounded-3xl bg-primary/10 text-primary">
+                <div className="mx-auto grid size-12 place-items-center rounded-[1.1rem] bg-primary/10 text-primary">
                   <FolderKanban className="size-5" />
                 </div>
                 <h3 className="mt-4 text-xl font-semibold tracking-tight">
@@ -168,7 +184,7 @@ export function ProjectsDashboardShell() {
           {!projectsQuery.isPending &&
           !projectsQuery.isError &&
           projects.length > 0 ? (
-            <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
               {projects.map((project) => (
                 <ProjectDashboardCard key={project.id} project={project} />
               ))}
@@ -190,11 +206,11 @@ function DashboardMetricTile({
   value: number | string;
 }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-surface-subtle px-4 py-3">
+    <div className="rounded-[1rem] border border-border/70 bg-card/90 px-4 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
+      <p className="mt-1.5 text-[1.65rem] font-semibold tracking-tight">{value}</p>
       <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
     </div>
   );
@@ -202,22 +218,27 @@ function DashboardMetricTile({
 
 export function ProjectsDashboardLoadingState() {
   return (
-    <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3" aria-label="Loading projects">
+    <div className="grid gap-3 lg:grid-cols-2" aria-label="Loading projects">
       {Array.from({ length: 6 }).map((_, index) => (
         <div
           key={index}
-          className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm"
+          className="rounded-[1rem] border border-border/70 bg-card p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
         >
           <div className="flex items-start gap-3">
-            <Skeleton className="size-10 rounded-2xl" />
+            <Skeleton className="size-9 rounded-[0.95rem]" />
             <div className="min-w-0 flex-1 space-y-2">
               <Skeleton className="h-4 w-2/5 rounded-full" />
               <Skeleton className="h-3 w-full rounded-full" />
               <Skeleton className="h-3 w-3/4 rounded-full" />
             </div>
           </div>
-          <Skeleton className="mt-4 h-2 w-full rounded-full" />
-          <div className="mt-4 flex gap-2">
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <Skeleton className="h-12 rounded-[0.95rem]" />
+            <Skeleton className="h-12 rounded-[0.95rem]" />
+            <Skeleton className="h-12 rounded-[0.95rem]" />
+          </div>
+          <Skeleton className="mt-3 h-2 w-full rounded-full" />
+          <div className="mt-3 flex gap-2">
             <Skeleton className="h-6 w-16 rounded-full" />
             <Skeleton className="h-6 w-20 rounded-full" />
             <Skeleton className="h-6 w-14 rounded-full" />
@@ -228,59 +249,72 @@ export function ProjectsDashboardLoadingState() {
   );
 }
 
-function ProjectDashboardCard({ project }: { project: ProjectSummary }) {
+function ProjectDashboardCard({
+  project,
+}: {
+  project: ProjectSummary;
+}) {
   const totalTasks = getProjectTotalTaskCount(project.taskCounts);
   const openTasks = getProjectOpenTaskCount(project.taskCounts);
   const completion = getProjectCompletionPercentage(project.taskCounts);
 
   return (
-    <article className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm transition-[border-color,background] duration-150 hover:border-primary/15 hover:bg-surface-subtle/40">
+    <article className="rounded-[1rem] border border-border/75 bg-linear-to-br from-background via-background to-surface-subtle/55 p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
       <div className="flex items-start gap-3">
-        <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-xs font-semibold text-primary">
+        <div className="grid size-10 shrink-0 place-items-center rounded-[0.95rem] border border-primary/10 bg-primary/[0.08] text-xs font-semibold text-primary">
           {getProjectInitials(project.name)}
         </div>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-foreground">
-              {project.name}
-            </h3>
-            <Badge variant={project.role === "OWNER" ? "outline" : "muted"}>
+            <Badge variant={project.role === "OWNER" ? "default" : "muted"} size="xs">
               {project.role === "OWNER" ? "Owner" : "Member"}
             </Badge>
           </div>
 
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            {project.description ??
-              "No description yet. Use the board to set the first execution context."}
-          </p>
+          <div className="space-y-1">
+            <h3 className="truncate text-[15px] font-semibold text-foreground">
+              {project.name}
+            </h3>
+            <p className="text-sm leading-5 text-muted-foreground">
+              {project.description ??
+                "No description yet. Use the board to set the first execution context."}
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
         <ProjectCardMetric label="Open" value={openTasks} />
         <ProjectCardMetric label="Tracked" value={totalTasks} />
         <ProjectCardMetric label="Complete" value={`${completion}%`} />
       </div>
 
-      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-muted">
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-muted">
         <div
           className="h-full rounded-full bg-primary"
           style={{ width: `${completion}%` }}
         />
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        <Badge variant="todo">TODO {project.taskCounts.TODO}</Badge>
-        <Badge variant="progress">
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <Badge variant="todo" size="xs">
+          Todo {project.taskCounts.TODO}
+        </Badge>
+        <Badge variant="progress" size="xs">
           In progress {project.taskCounts.IN_PROGRESS}
         </Badge>
-        <Badge variant="done">Done {project.taskCounts.DONE}</Badge>
+        <Badge variant="done" size="xs">
+          Done {project.taskCounts.DONE}
+        </Badge>
       </div>
 
       <div className="mt-4 flex justify-end">
         <Button asChild size="sm" className="rounded-xl">
-          <Link href={getProjectPath(project.id) as Route}>Open board</Link>
+          <Link href={getProjectPath(project.id) as Route}>
+            Open board
+            <ArrowRight className="size-4" />
+          </Link>
         </Button>
       </div>
     </article>
@@ -295,11 +329,11 @@ function ProjectCardMetric({
   value: number | string;
 }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-surface-subtle px-3 py-2.5">
+    <div className="rounded-[0.95rem] border border-border/70 bg-card/85 px-3 py-2">
       <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
         {label}
       </p>
-      <p className="mt-1.5 text-lg font-semibold tracking-tight">{value}</p>
+      <p className="mt-1 text-lg font-semibold tracking-tight">{value}</p>
     </div>
   );
 }

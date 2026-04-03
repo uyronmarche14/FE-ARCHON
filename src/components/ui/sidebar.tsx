@@ -135,7 +135,7 @@ function Sidebar({
         data-mode={mode}
         data-state={mode === "mobile" ? "expanded" : state}
         className={cn(
-          "group/sidebar fixed inset-y-0 left-0 z-50 flex w-[76vw] max-w-[16rem] flex-col border-r bg-card text-sidebar-foreground transition-[transform,width] duration-200 ease-out md:max-w-none md:translate-x-0",
+          "group/sidebar fixed inset-y-0 left-0 z-50 flex w-[76vw] max-w-[16rem] flex-col border-r border-sidebar-border bg-linear-to-b from-sidebar via-sidebar to-background text-sidebar-foreground transition-[transform,width] duration-200 ease-out md:max-w-none md:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           open ? "md:w-[16rem]" : "md:w-[4rem]",
           className,
@@ -273,7 +273,7 @@ function SidebarMenuButton({
       data-active={isActive}
       title={!open && mode !== "mobile" ? tooltip : undefined}
       className={cn(
-        "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-[14px] font-medium text-muted-foreground transition-all duration-200 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground data-[active=true]:font-semibold group-data-[state=collapsed]/sidebar:mx-auto group-data-[state=collapsed]/sidebar:size-10 group-data-[state=collapsed]/sidebar:justify-center group-data-[state=collapsed]/sidebar:rounded-md group-data-[state=collapsed]/sidebar:px-0 [&_svg]:shrink-0 [&_svg]:size-[1.1rem]",
+        "flex w-full items-center gap-3 rounded-[0.95rem] border border-transparent px-3 py-2 text-left text-[14px] font-medium text-muted-foreground transition-all duration-200 hover:border-border/60 hover:bg-background/90 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:border-primary/10 data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:font-semibold data-[active=true]:shadow-[0_1px_2px_rgba(15,23,42,0.04)] group-data-[state=collapsed]/sidebar:mx-auto group-data-[state=collapsed]/sidebar:size-10 group-data-[state=collapsed]/sidebar:justify-center group-data-[state=collapsed]/sidebar:rounded-[0.95rem] group-data-[state=collapsed]/sidebar:px-0 [&_svg]:shrink-0 [&_svg]:size-[1.1rem]",
         className,
       )}
       {...props}
@@ -289,7 +289,7 @@ function SidebarInset({
     <div
       data-slot="sidebar-inset"
       className={cn(
-        "flex min-h-screen min-w-0 flex-1 flex-col bg-muted/30",
+        "flex min-h-screen min-w-0 flex-1 flex-col bg-linear-to-b from-shell-inset via-background to-background",
         className,
       )}
       {...props}
@@ -309,7 +309,7 @@ function SidebarTrigger({
       type="button"
       variant="outline"
       size="icon-sm"
-      className={cn("rounded-xl bg-card/85 shadow-none", className)}
+      className={cn("rounded-[0.95rem] bg-card/85 shadow-none", className)}
       onClick={(event) => {
         onClick?.(event);
         toggleSidebar();

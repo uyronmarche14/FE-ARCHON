@@ -5,6 +5,7 @@ import { startTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { LoaderCircle, Plus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -163,57 +164,79 @@ export function CreateProjectDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="max-w-xl">
+        <DialogHeader className="border-b border-border/60 pb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" size="xs">
+              New workspace
+            </Badge>
+            <Badge variant="muted" size="xs">
+              Board ready after creation
+            </Badge>
+          </div>
           <DialogTitle>Create a project</DialogTitle>
           <DialogDescription>
             Start a new workspace with a clear name and optional description.
           </DialogDescription>
         </DialogHeader>
 
-        <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-1.5">
-            <Label htmlFor="project-name">Project name</Label>
-            <Input
-              id="project-name"
-              value={formValues.name}
-              placeholder="Launch website"
-              onChange={(event) =>
-                handleInputChange("name", event.target.value)
-              }
-              aria-invalid={fieldErrors.name ? true : undefined}
-              disabled={createProjectMutation.isPending}
-            />
-            {fieldErrors.name ? (
-              <p className="text-xs text-destructive">{fieldErrors.name}</p>
-            ) : null}
-          </div>
+        <form className="mt-5 space-y-5" onSubmit={handleSubmit}>
+          <section className="grid gap-4 rounded-[1.1rem] border border-border/70 bg-surface-subtle/55 px-4 py-4">
+            <div className="space-y-1">
+              <Label htmlFor="project-name">Project name</Label>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Use a clear workspace name people will recognize instantly in the sidebar and dashboard.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Input
+                id="project-name"
+                value={formValues.name}
+                placeholder="Launch website"
+                onChange={(event) =>
+                  handleInputChange("name", event.target.value)
+                }
+                aria-invalid={fieldErrors.name ? true : undefined}
+                disabled={createProjectMutation.isPending}
+              />
+              {fieldErrors.name ? (
+                <p className="text-xs text-destructive">{fieldErrors.name}</p>
+              ) : null}
+            </div>
+          </section>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="project-description">Description</Label>
-            <Textarea
-              id="project-description"
-              value={formValues.description}
-              placeholder="Track the work, reviews, and launch checkpoints."
-              onChange={(event) =>
-                handleInputChange("description", event.target.value)
-              }
-              aria-invalid={fieldErrors.description ? true : undefined}
-              disabled={createProjectMutation.isPending}
-            />
-            {fieldErrors.description ? (
-              <p className="text-xs text-destructive">
-                {fieldErrors.description}
+          <section className="grid gap-4 rounded-[1.1rem] border border-border/70 bg-card px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <div className="space-y-1">
+              <Label htmlFor="project-description">Description</Label>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Optional. Give the team just enough context to understand what this project will hold.
               </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Optional. Keep it concise and useful for the team.
-              </p>
-            )}
-          </div>
+            </div>
+            <div className="space-y-1.5">
+              <Textarea
+                id="project-description"
+                value={formValues.description}
+                placeholder="Track the work, reviews, and launch checkpoints."
+                onChange={(event) =>
+                  handleInputChange("description", event.target.value)
+                }
+                aria-invalid={fieldErrors.description ? true : undefined}
+                disabled={createProjectMutation.isPending}
+              />
+              {fieldErrors.description ? (
+                <p className="text-xs text-destructive">
+                  {fieldErrors.description}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Keep it concise and useful for the team.
+                </p>
+              )}
+            </div>
+          </section>
 
           {formError ? (
-            <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            <div className="rounded-[1rem] border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {formError}
             </div>
           ) : null}

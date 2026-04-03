@@ -1,4 +1,8 @@
-import type { ProjectsListResponse, ProjectSummary } from "@/contracts/projects";
+import type {
+  ProjectMember,
+  ProjectsListResponse,
+  ProjectSummary,
+} from "@/contracts/projects";
 import type { TaskCard, TaskGroups, TaskStatus } from "@/contracts/tasks";
 
 export type BoardLane = {
@@ -12,6 +16,8 @@ export type BoardMetric = {
   label: string;
   value: string;
 };
+
+export type TaskMemberLookup = Record<string, string>;
 
 export type BoardTaskAssigneeFilter = "ALL" | "UNASSIGNED" | string;
 export type BoardTaskDueDateFilter =
@@ -264,18 +270,39 @@ export function getBoardProjectDescription(projectSummary?: ProjectSummary | nul
   );
 }
 
-export function getTaskAssigneeLabel(assigneeId: string | null) {
-  return assigneeId ?? "Unassigned";
+export function createTaskMemberLookup(
+  members: Pick<ProjectMember, "id" | "name">[],
+): TaskMemberLookup {
+  return members.reduce<TaskMemberLookup>((memberLookup, member) => {
+    return {
+      ...memberLookup,
+      [member.id]: member.name,
+    };
+  }, {});
 }
 
-export function getTaskAssigneeInitials(assigneeId: string | null) {
+export function getTaskAssigneeLabel(
+  assigneeId: string | null,
+  memberLookup: TaskMemberLookup = {},
+) {
   if (!assigneeId) {
+    return "Unassigned";
+  }
+
+  return memberLookup[assigneeId] ?? "Unassigned";
+}
+
+export function getTaskAssigneeInitials(
+  assigneeId: string | null,
+  memberLookup: TaskMemberLookup = {},
+) {
+  const assigneeLabel = getTaskAssigneeLabel(assigneeId, memberLookup);
+
+  if (assigneeLabel === "Unassigned") {
     return "UA";
   }
 
-  const cleanedValue = assigneeId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-
-  return cleanedValue.slice(0, 2) || "AS";
+  return createInitialsFromName(assigneeLabel);
 }
 
 export function getTaskDueLabel(dueDate: string | null) {
@@ -292,6 +319,14 @@ export function getTaskPositionLabel(position: number | null, status: TaskStatus
   }
 
   return `Card ${position} in ${formatTaskStatusLabel(status)}.`;
+}
+
+export function getTaskPositionSummaryLabel(position: number | null) {
+  if (position === null) {
+    return "Flexible";
+  }
+
+  return `#${position}`;
 }
 
 export function formatTaskStatusLabel(status: TaskStatus) {
@@ -312,6 +347,24 @@ function cloneTaskGroups(taskGroups: TaskGroups) {
     IN_PROGRESS: [...taskGroups.IN_PROGRESS],
     DONE: [...taskGroups.DONE],
   };
+}
+
+function createInitialsFromName(name: string) {
+  const nameParts = name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.replace(/[^a-zA-Z0-9]/g, ""))
+    .filter(Boolean);
+
+  if (nameParts.length === 0) {
+    return "UA";
+  }
+
+  if (nameParts.length === 1) {
+    return nameParts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase();
 }
 
 function sortBoardTasks(tasks: TaskCard[], sortOrder: BoardTaskSort = "DEFAULT") {

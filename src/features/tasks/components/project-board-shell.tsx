@@ -36,6 +36,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InviteMemberDialog } from "@/features/projects/components/invite-member-dialog";
 import { getLaneDotClassName } from "@/features/tasks/components/board-column";
 import { BoardContainer } from "@/features/tasks/components/board-container";
@@ -64,6 +65,7 @@ import {
   createBoardLanes,
   createBoardMetrics,
   createEmptyTaskGroups,
+  createTaskMemberLookup,
   filterAndSortTaskGroups,
   flattenTaskGroups,
   getBoardProjectDescription,
@@ -118,6 +120,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
   const [activityEventType, setActivityEventType] =
     useState<TaskLogEventType | "ALL">("ALL");
   const [activitySearchQuery, setActivitySearchQuery] = useState("");
+  const [activeSurfaceTab, setActiveSurfaceTab] = useState<"board" | "activity">(
+    "board",
+  );
 
   const currentProject =
     projectsQuery.data?.items.find((project) => project.id === projectId) ?? null;
@@ -152,6 +157,10 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     () => createAssigneeFilterOptions(taskGroups, membersQuery.data ?? []),
     [membersQuery.data, taskGroups],
   );
+  const memberLookup = useMemo(
+    () => createTaskMemberLookup(membersQuery.data ?? []),
+    [membersQuery.data],
+  );
   const selectedTask =
     drawerState?.taskId !== null && drawerState?.taskId !== undefined
       ? allTasks.find((task) => task.id === drawerState.taskId) ?? null
@@ -169,7 +178,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
       ? "closed"
       : drawerState.mode === "create"
         ? `create:${drawerState.initialStatus}`
-        : `${drawerState.mode}:${drawerState.taskId}:${selectedTask?.updatedAt ?? "missing"}`;
+        : drawerState.mode === "view"
+          ? `view:${drawerState.taskId}`
+          : `edit:${drawerState.taskId}:${selectedTask?.updatedAt ?? "missing"}`;
   const activeDragTask =
     activeDragTaskId !== null
       ? allTasks.find((task) => task.id === activeDragTaskId) ?? null
@@ -483,6 +494,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     <KanbanBoardLane
       key={`desktop:${lane.status}`}
       lane={lane}
+      memberLookup={memberLookup}
       onAddTask={openCreateTask}
       onOpenTask={openTask}
       presentation="desktop"
@@ -493,6 +505,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     <KanbanBoardLane
       key={`mobile:${lane.status}`}
       lane={lane}
+      memberLookup={memberLookup}
       onAddTask={openCreateTask}
       onOpenTask={openTask}
       presentation="mobile"
@@ -502,23 +515,23 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
   return (
     <section className="space-y-4">
       <Card className="overflow-hidden border-border/70 bg-card shadow-sm">
-        <CardContent className="space-y-4 px-4 py-4 sm:px-5">
-          <header className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0 space-y-3">
+        <CardContent className="space-y-4 bg-linear-to-b from-background via-background to-surface-subtle/40 px-4 py-4 sm:px-5">
+          <header className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 space-y-2.5">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="bg-background">
+                <Badge variant="outline" size="xs" className="bg-background">
                   Project board
                 </Badge>
-                <Badge variant="muted" className="px-2">
+                <Badge variant="muted" size="xs">
                   {visibleTasks.length} visible
                 </Badge>
               </div>
 
-              <div className="space-y-1.5">
-                <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              <div className="space-y-1">
+                <h2 className="text-[1.85rem] font-semibold tracking-tight">
                   {projectName}
                 </h2>
-                <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+                <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
                   {projectDescription}
                 </p>
               </div>
@@ -529,7 +542,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
               <Button
                 type="button"
                 size="sm"
-                className="rounded-md"
+                className="rounded-xl"
                 onClick={() => openCreateTask("TODO")}
               >
                 <Plus className="size-4" />
@@ -537,94 +550,6 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
               </Button>
             </div>
           </header>
-
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
-            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_12rem_12rem]">
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  aria-label="Search board tasks"
-                  className="pl-9"
-                  placeholder="Search title or description"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                />
-              </div>
-
-              <Select
-                aria-label="Filter tasks by assignee"
-                value={assigneeFilter}
-                onChange={(event) =>
-                  setAssigneeFilter(event.target.value as BoardTaskAssigneeFilter)
-                }
-              >
-                {assigneeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {"count" in option ? `${option.label} (${option.count})` : option.label}
-                  </option>
-                ))}
-              </Select>
-
-              <Select
-                aria-label="Filter tasks by due date"
-                value={dueDateFilter}
-                onChange={(event) =>
-                  setDueDateFilter(event.target.value as BoardTaskDueDateFilter)
-                }
-              >
-                <option value="ALL">All due dates</option>
-                <option value="NO_DUE_DATE">No due date</option>
-                <option value="OVERDUE">Overdue</option>
-                <option value="NEXT_7_DAYS">Next 7 days</option>
-                <option value="FUTURE">Future</option>
-              </Select>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-              <Badge variant="muted" className="justify-center rounded-md px-3 py-2">
-                Grouped by lane
-              </Badge>
-              <Select
-                aria-label="Sort visible task cards"
-                value={sortOrder}
-                onChange={(event) =>
-                  setSortOrder(event.target.value as BoardTaskSort)
-                }
-              >
-                <option value="DEFAULT">Board order</option>
-                <option value="DUE_DATE">Due date</option>
-                <option value="NEWEST_UPDATED">Newest updated</option>
-                <option value="OLDEST_CREATED">Oldest created</option>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {boardFilters.map((filter) => (
-              <button
-                key={filter.label}
-                type="button"
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-                  filter.active
-                    ? "border-border bg-background text-foreground shadow-sm"
-                    : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground",
-                )}
-              >
-                <span>{filter.label}</span>
-                <span
-                  className={cn(
-                    "rounded-sm px-1.5 py-0.5 text-[11px] font-semibold",
-                    filter.active
-                      ? "bg-primary/10 text-primary"
-                      : "bg-muted text-muted-foreground",
-                  )}
-                >
-                  {filter.value}
-                </span>
-              </button>
-            ))}
-          </div>
 
           <div className="grid gap-2 sm:grid-cols-3">
             {metrics.map((metric, index) => {
@@ -638,13 +563,13 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
               return (
                 <article
                   key={metric.label}
-                  className="rounded-lg border border-border/70 bg-surface-subtle/55 px-3.5 py-3"
+                  className="rounded-[1rem] border border-border/70 bg-card/90 px-3.5 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
                 >
                   <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                     <Icon className="size-3.5 text-primary" />
                     {metric.label}
                   </div>
-                  <p className="mt-2 text-2xl font-semibold tracking-tight">
+                  <p className="mt-1.5 text-[1.65rem] font-semibold tracking-tight">
                     {metric.value}
                   </p>
                 </article>
@@ -654,38 +579,166 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
         </CardContent>
       </Card>
 
-      <ProjectActivityFeedCard
-        projectId={projectId}
-        eventType={activityEventType}
-        searchQuery={activitySearchQuery}
-        onEventTypeChange={setActivityEventType}
-        onSearchQueryChange={setActivitySearchQuery}
-      />
-
-      <DndContext
-        sensors={dragSensors}
-        collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragCancel={handleDragCancel}
-        onDragEnd={handleDragEnd}
+      <Tabs
+        value={activeSurfaceTab}
+        onValueChange={(value) => setActiveSurfaceTab(value as "board" | "activity")}
+        className="grid gap-3"
       >
-        <BoardContainer
-          desktopChildren={desktopBoardLanes}
-          mobileChildren={mobileBoardLanes}
-        />
-        <DragOverlay>
-          {activeDragTask ? (
-            <div className="w-[22rem]">
-              <BoardTaskCard task={activeDragTask} isDragging />
+        <div className="flex items-center justify-between gap-3">
+          <TabsList aria-label="Project surface view">
+            <TabsTrigger value="board">Board</TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
+          </TabsList>
+          <Badge variant="muted" size="xs">
+            {activeSurfaceTab === "board" ? `${visibleTasks.length} visible` : "Project-wide history"}
+          </Badge>
+        </div>
+
+        <TabsContent value="board" className="grid gap-3">
+          <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_11rem_11rem]">
+              <div className="rounded-[0.95rem] border border-border/70 bg-background/90 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    aria-label="Search board tasks"
+                    className="border-0 bg-transparent pl-9 shadow-none"
+                    placeholder="Search title or description"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-[0.95rem] border border-border/70 bg-background/90 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <Select
+                  aria-label="Filter tasks by assignee"
+                  value={assigneeFilter}
+                  className="border-0 bg-transparent shadow-none"
+                  onChange={(event) =>
+                    setAssigneeFilter(event.target.value as BoardTaskAssigneeFilter)
+                  }
+                >
+                  {assigneeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {"count" in option ? `${option.label} (${option.count})` : option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="rounded-[0.95rem] border border-border/70 bg-background/90 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <Select
+                  aria-label="Filter tasks by due date"
+                  value={dueDateFilter}
+                  className="border-0 bg-transparent shadow-none"
+                  onChange={(event) =>
+                    setDueDateFilter(event.target.value as BoardTaskDueDateFilter)
+                  }
+                >
+                  <option value="ALL">All due dates</option>
+                  <option value="NO_DUE_DATE">No due date</option>
+                  <option value="OVERDUE">Overdue</option>
+                  <option value="NEXT_7_DAYS">Next 7 days</option>
+                  <option value="FUTURE">Future</option>
+                </Select>
+              </div>
             </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+              <Badge
+                variant="muted"
+                size="xs"
+                className="justify-center rounded-[0.95rem] px-3 py-2"
+              >
+                Grouped by lane
+              </Badge>
+              <div className="rounded-[0.95rem] border border-border/70 bg-background/90 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <Select
+                  aria-label="Sort visible task cards"
+                  value={sortOrder}
+                  className="border-0 bg-transparent shadow-none"
+                  onChange={(event) =>
+                    setSortOrder(event.target.value as BoardTaskSort)
+                  }
+                >
+                  <option value="DEFAULT">Board order</option>
+                  <option value="DUE_DATE">Due date</option>
+                  <option value="NEWEST_UPDATED">Newest updated</option>
+                  <option value="OLDEST_CREATED">Oldest created</option>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {boardFilters.map((filter) => (
+              <button
+                key={filter.label}
+                type="button"
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                  filter.active
+                    ? "border-border bg-background text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                    : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                )}
+              >
+                <span>{filter.label}</span>
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 py-0.5 text-[11px] font-semibold",
+                    filter.active
+                      ? "bg-primary/10 text-primary"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {filter.value}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <DndContext
+            sensors={dragSensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragCancel={handleDragCancel}
+            onDragEnd={handleDragEnd}
+          >
+            <BoardContainer
+              desktopChildren={desktopBoardLanes}
+              mobileChildren={mobileBoardLanes}
+            />
+            <DragOverlay>
+              {activeDragTask ? (
+                <div className="w-[20.5rem]">
+                  <BoardTaskCard
+                    memberLookup={memberLookup}
+                    task={activeDragTask}
+                    isDragging
+                  />
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        </TabsContent>
+
+        <TabsContent value="activity">
+          <ProjectActivityFeedCard
+            projectId={projectId}
+            eventType={activityEventType}
+            searchQuery={activitySearchQuery}
+            onEventTypeChange={setActivityEventType}
+            onSearchQueryChange={setActivitySearchQuery}
+          />
+        </TabsContent>
+      </Tabs>
 
       <TaskDrawer
         key={drawerStateKey}
         open={isDrawerOpen}
         mode={drawerMode}
+        memberLookup={memberLookup}
         projectId={projectId}
         task={selectedTask}
         initialStatus={drawerInitialStatus}
@@ -722,14 +775,16 @@ export function ProjectBoardLoadingState({
   projectName: string;
 }) {
   return (
-    <section aria-label="Loading project tasks" className="space-y-4">
+    <section aria-label="Loading project tasks" className="space-y-5">
       <Card className="overflow-hidden border-border/70 bg-card shadow-sm">
-        <CardContent className="space-y-4 px-4 py-4 sm:px-5">
+        <CardContent className="space-y-4 bg-linear-to-b from-background via-background to-surface-subtle/40 px-4 py-4 sm:px-5">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="bg-background">
+            <Badge variant="outline" size="xs" className="bg-background">
               Project board
             </Badge>
-            <Badge variant="muted">Loading</Badge>
+            <Badge variant="muted" size="xs">
+              Loading
+            </Badge>
           </div>
           <div className="space-y-2">
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -765,14 +820,16 @@ function ProjectBoardErrorState({
   projectName: string;
 }) {
   return (
-    <section className="space-y-4">
+    <section className="space-y-5">
       <Card className="overflow-hidden border-border/70 bg-card shadow-sm">
-        <CardContent className="space-y-4 px-4 py-4 sm:px-5">
+        <CardContent className="space-y-4 bg-linear-to-b from-background via-background to-surface-subtle/40 px-4 py-4 sm:px-5">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="bg-background">
+            <Badge variant="outline" size="xs" className="bg-background">
               Project board
             </Badge>
-            <Badge variant="muted">Load blocked</Badge>
+            <Badge variant="muted" size="xs">
+              Load blocked
+            </Badge>
           </div>
           <div className="space-y-1.5">
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -804,10 +861,10 @@ function ProjectBoardErrorState({
 
 function BoardLaneSkeleton({ title }: { title: string }) {
   return (
-    <section className="w-[22rem] shrink-0 overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+    <section className="w-[21.75rem] shrink-0 overflow-hidden rounded-[1.2rem] border border-border/70 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <header className="border-b border-border/60 px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className={cn("size-2 rounded-full", getLaneDotClassName(getLaneStatus(title)))} />
+          <span className={cn("size-2.5 rounded-full", getLaneDotClassName(getLaneStatus(title)))} />
           <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
         </div>
       </header>

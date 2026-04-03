@@ -55,12 +55,17 @@ export function TaskForm({
   return (
     <form className="mt-5 grid gap-5" onSubmit={onSubmit}>
       {mode === "create" ? (
-        <section className="space-y-3 rounded-lg border border-border/70 bg-surface-subtle/55 px-4 py-4">
-          <div className="space-y-1">
-            <Label>Initial lane</Label>
-            <p className="text-xs text-muted-foreground">
-              Choose where the new task should land first.
-            </p>
+        <section className="space-y-4 rounded-[1.1rem] border border-border/70 bg-surface-subtle/55 px-4 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <Label>Initial lane</Label>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Choose where the new task should land first.
+              </p>
+            </div>
+            <Badge variant="outline" size="xs">
+              Board placement
+            </Badge>
           </div>
           <div className="flex flex-wrap gap-2">
             {TASK_STATUSES.map((status) => (
@@ -68,15 +73,15 @@ export function TaskForm({
                 key={status}
                 type="button"
                 className={cn(
-                  "inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                  "inline-flex items-center rounded-[0.95rem] border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                   values.status === status
-                    ? "border-primary/30 bg-primary/10 text-primary"
+                    ? "border-primary/30 bg-primary/[0.08] text-primary shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
                     : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
                 onClick={() => onValueChange("status", status)}
                 aria-pressed={values.status === status}
               >
-                <Badge variant={getStatusBadgeVariant(status)}>
+                <Badge variant={getStatusBadgeVariant(status)} size="xs">
                   {formatTaskStatusLabel(status)}
                 </Badge>
               </button>
@@ -85,7 +90,19 @@ export function TaskForm({
         </section>
       ) : null}
 
-      <section className="grid gap-4 rounded-lg border border-border/70 bg-card px-4 py-4 shadow-sm">
+      <section className="grid gap-4 rounded-[1.1rem] border border-border/70 bg-card px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="task-title">Task details</Label>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Keep the task readable at a glance while preserving enough context for the drawer.
+            </p>
+          </div>
+          <Badge variant="outline" size="xs">
+            Core content
+          </Badge>
+        </div>
+
         <div className="space-y-1.5">
           <Label htmlFor="task-title">Task title</Label>
           <Input
@@ -113,19 +130,19 @@ export function TaskForm({
             placeholder="Capture the work, context, and next check needed."
             aria-invalid={errors.description ? true : undefined}
             disabled={isPending}
-          onChange={(event) => onValueChange("description", event.target.value)}
-        />
-        {errors.description ? (
-          <p className="text-xs text-destructive">{errors.description}</p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Optional. Keep the summary concrete and brief.
-          </p>
-        )}
-      </div>
+            onChange={(event) => onValueChange("description", event.target.value)}
+          />
+          {errors.description ? (
+            <p className="text-xs text-destructive">{errors.description}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Optional. Keep the summary concrete and brief.
+            </p>
+          )}
+        </div>
       </section>
 
-      <section className="grid gap-4 rounded-lg border border-border/70 bg-card px-4 py-4 shadow-sm sm:grid-cols-2">
+      <section className="grid gap-4 rounded-[1.1rem] border border-border/70 bg-card px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="task-assignee">Assignee</Label>
           <Select
@@ -176,7 +193,7 @@ export function TaskForm({
       </section>
 
       {formError ? (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+        <div className="rounded-[1rem] border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           {formError}
         </div>
       ) : null}
@@ -185,12 +202,17 @@ export function TaskForm({
         <Button
           type="button"
           variant="outline"
+          className="rounded-xl"
           onClick={onCancel}
           disabled={isPending}
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={isPending || saveDisabled}>
+        <Button
+          type="submit"
+          className="rounded-xl"
+          disabled={isPending || saveDisabled}
+        >
           {isPending ? (
             <>
               <LoaderCircle className="size-3.5 animate-spin" />

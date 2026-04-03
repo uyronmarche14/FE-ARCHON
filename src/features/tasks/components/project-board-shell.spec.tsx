@@ -16,6 +16,7 @@ import { projectsQueryKey } from "@/features/projects/lib/project-query-keys";
 const getProjectsMock = vi.hoisted(() => vi.fn());
 const getProjectTasksMock = vi.hoisted(() => vi.fn());
 const getProjectDetailMock = vi.hoisted(() => vi.fn());
+const getProjectActivityMock = vi.hoisted(() => vi.fn());
 const getTaskLogsMock = vi.hoisted(() => vi.fn());
 const createTaskMock = vi.hoisted(() => vi.fn());
 const updateTaskMock = vi.hoisted(() => vi.fn());
@@ -117,11 +118,13 @@ vi.mock("lucide-react", () => {
 
   return {
     AlertTriangle: Icon,
+    ArrowRight: Icon,
     ArrowUpDown: Icon,
     CalendarClock: Icon,
     Clock3: Icon,
     ChevronDown: Icon,
     CircleCheckBig: Icon,
+    FileText: Icon,
     Filter: Icon,
     GripVertical: Icon,
     LayoutGrid: Icon,
@@ -133,6 +136,7 @@ vi.mock("lucide-react", () => {
     Plus: Icon,
     RefreshCw: Icon,
     Search: Icon,
+    Sparkles: Icon,
     Trash2: Icon,
     UserRound: Icon,
     X: Icon,
@@ -149,6 +153,10 @@ vi.mock("@/features/tasks/services/get-project-tasks", () => ({
 
 vi.mock("@/features/projects/services/get-project-detail", () => ({
   getProjectDetail: getProjectDetailMock,
+}));
+
+vi.mock("@/features/projects/services/get-project-activity", () => ({
+  getProjectActivity: getProjectActivityMock,
 }));
 
 vi.mock("@/features/projects/components/invite-member-dialog", () => ({
@@ -354,6 +362,7 @@ describe("ProjectBoardShell", () => {
     getProjectsMock.mockReset();
     getProjectTasksMock.mockReset();
     getProjectDetailMock.mockReset();
+    getProjectActivityMock.mockReset();
     getTaskLogsMock.mockReset();
     createTaskMock.mockReset();
     updateTaskMock.mockReset();
@@ -390,6 +399,12 @@ describe("ProjectBoardShell", () => {
     getTaskLogsMock.mockImplementation(async (taskId: string) => ({
       items: taskLogState[taskId] ?? [],
     }));
+    getProjectActivityMock.mockResolvedValue({
+      items: [],
+      page: 1,
+      pageSize: 10,
+      hasMore: false,
+    });
     createTaskMock.mockImplementation(
       async (
         projectId: string,
@@ -589,10 +604,19 @@ describe("ProjectBoardShell", () => {
     expect(screen.getByText("Draft API envelope")).toBeInTheDocument();
   });
 
-  it("renders live grouped task lanes and opens a 40vw drawer from a task card", async () => {
+  it("renders live grouped task lanes and opens the narrower task drawer from a task card", async () => {
     renderBoard();
 
     expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("img", { name: /assignee jordan lane/i }),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByRole("tab", { name: "Board" })).toHaveAttribute(
+      "data-state",
+      "active",
+    );
     expect(
       screen.getByPlaceholderText("Search title or description"),
     ).toBeInTheDocument();
@@ -608,6 +632,7 @@ describe("ProjectBoardShell", () => {
     expect(
       screen.queryByRole("button", { name: /drag draft api envelope/i }),
     ).not.toBeInTheDocument();
+    expect(screen.queryByText(/no fixed order in/i)).not.toBeInTheDocument();
 
     fireEvent.click(getTaskOpenButton("Draft API envelope"));
 
@@ -616,7 +641,80 @@ describe("ProjectBoardShell", () => {
     });
 
     expect(drawer).toBeInTheDocument();
-    expect(drawer).toHaveClass("md:w-[40vw]");
+    expect(drawer).toHaveClass("md:w-[34vw]");
+  });
+
+  it("shows resolved member names instead of raw assignee ids in the drawer preview", async () => {
+    renderBoard();
+
+    expect(await findTaskOpenButton("Wire refresh token flow")).toBeInTheDocument();
+
+    fireEvent.click(getTaskOpenButton("Wire refresh token flow"));
+
+    const drawer = await screen.findByRole("dialog", {
+      name: /wire refresh token flow/i,
+    });
+
+    expect(within(drawer).getAllByText("Jordan Lane").length).toBeGreaterThan(0);
+    expect(within(drawer).queryByText("member-1")).not.toBeInTheDocument();
+  });
+
+  it("switches between compact board and activity tabs without stacking both surfaces", async () => {
+    getProjectActivityMock.mockResolvedValueOnce({
+      items: [
+        {
+          id: "activity-1",
+          eventType: "STATUS_CHANGED",
+          fieldName: "status",
+          oldValue: "TODO",
+          newValue: "IN_PROGRESS",
+          summary: "Member User moved the task from Todo to In progress",
+          actor: {
+            id: "member-1",
+            name: "Member User",
+          },
+          createdAt: "2026-04-06T09:00:00.000Z",
+          task: {
+            id: "task-api-envelope",
+            title: "Draft API envelope",
+            status: "IN_PROGRESS",
+          },
+        },
+      ],
+      page: 1,
+      pageSize: 10,
+      hasMore: false,
+    });
+
+    renderBoard();
+
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
+    expect(getProjectActivityMock).toHaveBeenCalledTimes(0);
+    expect(
+      screen.getByPlaceholderText("Search title or description"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Search project activity"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
+
+    expect(
+      await screen.findByLabelText("Search project activity"),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Member User moved the task from Todo to In progress"),
+    ).toBeInTheDocument();
+    expect(getProjectActivityMock).toHaveBeenCalledWith("qa-readiness", {
+      eventType: "ALL",
+      page: 1,
+      pageSize: 10,
+      q: "",
+    });
+    expect(
+      screen.queryByPlaceholderText("Search title or description"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("board-lanes-scroll-area")).not.toBeInTheDocument();
   });
 
   it("moves a task across lanes optimistically and calls the status patch endpoint", async () => {
@@ -832,7 +930,7 @@ describe("ProjectBoardShell", () => {
       await screen.findByText(/delete this task\?/i),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^delete task$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm delete/i }));
 
     await waitFor(() => {
       expect(deleteTaskMock).toHaveBeenCalledWith("task-api-envelope");
@@ -951,12 +1049,51 @@ describe("ProjectBoardShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
     fireEvent.click(getTaskOpenButton("Draft API envelope"));
+    const taskDrawer = await screen.findByRole("dialog", {
+      name: /draft api envelope/i,
+    });
+
+    expect(within(taskDrawer).getByRole("tab", { name: "Overview" })).toHaveAttribute(
+      "data-state",
+      "active",
+    );
+    expect(getTaskLogsMock).toHaveBeenCalledTimes(0);
+
+    fireEvent.click(within(taskDrawer).getByRole("tab", { name: "Activity" }));
 
     expect(await screen.findByText(/no activity yet/i)).toBeInTheDocument();
     expect(getTaskLogsMock).toHaveBeenCalledWith("task-api-envelope", {
       page: 1,
       pageSize: 10,
     });
+  });
+
+  it("resets the drawer to overview when a different task is opened", async () => {
+    renderBoard();
+
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
+
+    fireEvent.click(getTaskOpenButton("Draft API envelope"));
+
+    let taskDrawer = await screen.findByRole("dialog", {
+      name: /draft api envelope/i,
+    });
+
+    fireEvent.click(within(taskDrawer).getByRole("tab", { name: "Activity" }));
+    expect(await screen.findByText(/no activity yet/i)).toBeInTheDocument();
+    expect(getTaskLogsMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(getTaskOpenButton("Wire refresh token flow"));
+
+    taskDrawer = await screen.findByRole("dialog", {
+      name: /wire refresh token flow/i,
+    });
+
+    expect(
+      within(taskDrawer).getByRole("tab", { name: "Overview" }),
+    ).toHaveAttribute("data-state", "active");
+    expect(within(taskDrawer).queryByText(/no activity yet/i)).not.toBeInTheDocument();
+    expect(getTaskLogsMock).toHaveBeenCalledTimes(1);
   });
 
   it("renders newest-first log history and can retry after a log load error", async () => {
@@ -999,6 +1136,10 @@ describe("ProjectBoardShell", () => {
     expect(await findTaskOpenButton("Wire refresh token flow")).toBeInTheDocument();
 
     fireEvent.click(getTaskOpenButton("Wire refresh token flow"));
+    const taskDrawer = await screen.findByRole("dialog", {
+      name: /wire refresh token flow/i,
+    });
+    fireEvent.click(within(taskDrawer).getByRole("tab", { name: "Activity" }));
 
     expect(
       await screen.findByText(/we couldn't load the activity log/i),
@@ -1023,13 +1164,17 @@ describe("ProjectBoardShell", () => {
     expect(await findTaskOpenButton("Wire refresh token flow")).toBeInTheDocument();
 
     fireEvent.click(getTaskOpenButton("Wire refresh token flow"));
-    expect(await screen.findByText(/no activity yet/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /edit task/i }));
     fireEvent.change(screen.getByLabelText("Task title"), {
       target: { value: "Wire refresh token flow safely" },
     });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    const taskDrawer = await screen.findByRole("dialog", {
+      name: /wire refresh token flow safely/i,
+    });
+    fireEvent.click(within(taskDrawer).getByRole("tab", { name: "Activity" }));
 
     expect(
       await screen.findByText("Member User updated the title"),

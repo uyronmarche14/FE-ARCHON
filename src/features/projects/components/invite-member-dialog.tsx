@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { LoaderCircle, MailPlus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -89,33 +90,54 @@ export function InviteMemberDialog({ projectId }: InviteMemberDialogProps) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="max-w-lg">
+        <DialogHeader className="border-b border-border/60 pb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" size="xs">
+              Team access
+            </Badge>
+            <Badge variant="muted" size="xs">
+              Email invite
+            </Badge>
+          </div>
           <DialogTitle>Invite a member</DialogTitle>
           <DialogDescription>
             Send a project invite by email. New users can sign up from the invite and existing users can accept it after login.
           </DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-1.5">
-            <Label htmlFor="invite-email">Email</Label>
-            <Input
-              id="invite-email"
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                setFieldError(null);
-                setFormError(null);
-              }}
-              placeholder="teammate@example.com"
-              disabled={createInviteMutation.isPending}
-            />
-            {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
-          </div>
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          <section className="grid gap-4 rounded-[1.1rem] border border-border/70 bg-surface-subtle/55 px-4 py-4">
+            <div className="space-y-1">
+              <Label htmlFor="invite-email">Email</Label>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Invite the teammate by work email so they can join this project directly from the app flow.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Input
+                id="invite-email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setFieldError(null);
+                  setFormError(null);
+                }}
+                placeholder="teammate@example.com"
+                disabled={createInviteMutation.isPending}
+              />
+              {fieldError ? (
+                <p className="text-xs text-destructive">{fieldError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  The invite email carries the acceptance link and project context.
+                </p>
+              )}
+            </div>
+          </section>
 
           {formError ? (
-            <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            <div className="rounded-[1rem] border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {formError}
             </div>
           ) : null}

@@ -39,8 +39,8 @@ export const BoardColumn = React.forwardRef<HTMLElement, BoardColumnProps>(
         ref={ref}
         data-testid={dataTestId}
         className={cn(
-          "min-w-0 overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm",
-          presentation === "desktop" ? "w-[22rem] shrink-0" : "w-full",
+          "min-w-0 overflow-hidden rounded-[1.2rem] border border-border/70 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+          presentation === "desktop" ? "w-[20.5rem] shrink-0" : "w-full",
           className,
         )}
       >
@@ -75,17 +75,19 @@ export function BoardColumnHeader({
   title,
 }: BoardColumnHeaderProps) {
   return (
-    <header className="sticky top-0 z-10 border-b border-border/60 bg-card/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/88">
-      <div className="flex items-start justify-between gap-3">
+    <header className="sticky top-0 z-10 border-b border-border/60 bg-card/95 px-3.5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/90">
+      <div className="flex min-h-[4.8rem] items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
-            <span className={cn("size-2 rounded-full", getLaneDotClassName(status))} />
-            <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
-            <span className="rounded-sm bg-surface-subtle px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+            <span className={cn("size-2.5 rounded-full", getLaneDotClassName(status))} />
+            <h3 className="text-sm font-semibold tracking-tight text-foreground">
+              {title}
+            </h3>
+            <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
               {count}
             </span>
           </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
+          <p className="line-clamp-2 pr-6 text-xs leading-5 text-muted-foreground">
             {description}
           </p>
         </div>
@@ -95,7 +97,7 @@ export function BoardColumnHeader({
             type="button"
             variant="ghost"
             size="icon-xs"
-            className="rounded-md text-muted-foreground"
+            className="rounded-lg text-muted-foreground"
             aria-label={`Add task to ${title}`}
             onClick={onAddTask}
           >
@@ -105,7 +107,7 @@ export function BoardColumnHeader({
             type="button"
             variant="ghost"
             size="icon-xs"
-            className="rounded-md text-muted-foreground"
+            className="rounded-lg text-muted-foreground"
             aria-label={`${title} lane options`}
           >
             <MoreHorizontal className="size-3.5" />
@@ -120,12 +122,21 @@ export function BoardLaneBody({
   children,
   className,
 }: ComponentProps<"div">) {
-  return <div className={cn("grid gap-2.5 p-3", className)}>{children}</div>;
+  return (
+    <div
+      className={cn(
+        "grid content-start gap-2.5 bg-linear-to-b from-background to-surface-subtle/35 p-3 [&>*]:w-full",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function BoardLaneEmptyState({ lane }: { lane: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-border/70 bg-surface-subtle/35 px-4 py-6 text-center">
+    <div className="rounded-[1rem] border border-dashed border-border/70 bg-surface-subtle/35 px-4 py-6 text-center">
       <p className="text-sm font-semibold text-foreground">No cards in {lane}.</p>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
         This lane will fill automatically when tasks arrive for this workflow state.

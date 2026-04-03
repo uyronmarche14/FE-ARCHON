@@ -13,6 +13,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useProjectMembers } from "@/features/tasks/hooks/use-project-members";
 import { useTaskLogs } from "@/features/tasks/hooks/use-task-logs";
 import { TaskForm } from "@/features/tasks/components/task-form";
@@ -27,12 +28,19 @@ import {
   type TaskFormErrors,
   type TaskFormValues,
 } from "@/features/tasks/lib/task-form";
+import {
+  formatTaskStatusLabel,
+  getTaskAssigneeLabel,
+  getTaskDueLabel,
+  type TaskMemberLookup,
+} from "@/features/tasks/lib/task-board";
 import { isApiClientError } from "@/services/http/api-client-error";
 import { showApiErrorToast } from "@/lib/toast";
 
 type TaskDrawerProps = {
   open: boolean;
   mode: "create" | "edit" | "view";
+  memberLookup?: TaskMemberLookup;
   projectId: string;
   task: TaskCard | null;
   initialStatus: TaskStatus;
@@ -49,6 +57,7 @@ type TaskDrawerProps = {
 export function TaskDrawer({
   open,
   mode,
+  memberLookup,
   projectId,
   task,
   initialStatus,
@@ -62,9 +71,12 @@ export function TaskDrawer({
   onUpdate,
 }: TaskDrawerProps) {
   const membersQuery = useProjectMembers(projectId, open && mode !== "view");
+  const [activeViewTab, setActiveViewTab] = useState<"overview" | "activity">(
+    "overview",
+  );
   const taskLogsQuery = useTaskLogs(
     task?.id ?? "",
-    open && mode === "view" && task !== null,
+    open && mode === "view" && task !== null && activeViewTab === "activity",
   );
   const taskLogEntries =
     taskLogsQuery.data?.pages.flatMap((page) => page.items) ?? [];
@@ -76,6 +88,8 @@ export function TaskDrawer({
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isPending = isCreatePending || isUpdatePending || isDeletePending;
+  const assigneeLabel =
+    task !== null ? getTaskAssigneeLabel(task.assigneeId, memberLookup) : "Unassigned";
   const updateRequest = useMemo(
     () => (mode === "edit" && task ? buildUpdateTaskRequest(task, formValues) : null),
     [formValues, mode, task],
@@ -160,13 +174,18 @@ export function TaskDrawer({
         onOpenChange(nextOpen);
       }}
     >
-      <SheetContent className="w-[calc(100vw-1rem)] max-w-none overflow-y-auto px-4 py-4 sm:w-[calc(100vw-2rem)] sm:px-5 sm:py-5 md:w-[40vw]">
+      <SheetContent className="w-[calc(100vw-1rem)] max-w-none overflow-y-auto px-4 py-4 sm:w-[calc(100vw-2rem)] sm:px-5 sm:py-5 md:w-[34vw] xl:w-[34rem]">
         {mode === "create" ? (
           <>
-            <SheetHeader className="gap-3 border-b border-border/60 pb-4">
-              <Badge variant="outline" className="w-fit bg-background">
-                New task
-              </Badge>
+            <SheetHeader className="gap-3 border-b border-border/60 pb-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" size="xs" className="w-fit bg-background">
+                  New task
+                </Badge>
+                <Badge variant="muted" size="xs">
+                  Board context stays open
+                </Badge>
+              </div>
               <SheetTitle>Create task</SheetTitle>
               <SheetDescription>
                 Add a new card without leaving the board surface.
@@ -197,10 +216,15 @@ export function TaskDrawer({
 
         {mode === "edit" && task ? (
           <>
-            <SheetHeader className="gap-3 border-b border-border/60 pb-4">
-              <Badge variant="outline" className="w-fit bg-background">
-                Editing
-              </Badge>
+            <SheetHeader className="gap-3 border-b border-border/60 pb-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" size="xs" className="w-fit bg-background">
+                  Editing
+                </Badge>
+                <Badge variant="muted" size="xs">
+                  Changes stay in context
+                </Badge>
+              </div>
               <SheetTitle>Edit task</SheetTitle>
               <SheetDescription>
                 Update task details without losing board context.
@@ -232,92 +256,150 @@ export function TaskDrawer({
 
         {mode === "view" && task ? (
           <div className="grid gap-4">
-            <TaskPreviewPanel task={task} presentation="sheet" />
-            <TaskLogsTimeline
-              entries={taskLogEntries}
-              hasMore={taskLogsQuery.hasNextPage ?? false}
-              isFetchingMore={taskLogsQuery.isFetchingNextPage}
-              isLoading={taskLogsQuery.isPending}
-              errorMessage={taskLogsQuery.isError ? "Try the request again to load the latest task history." : null}
-              onLoadMore={() => {
-                void taskLogsQuery.fetchNextPage();
-              }}
-              onRetry={() => {
-                void taskLogsQuery.refetch();
-              }}
-            />
-
-            {confirmDelete ? (
-              <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-destructive">
-                      Delete this task?
-                    </p>
-                    <p className="text-sm leading-relaxed text-destructive/90">
-                      This removes the card from the board immediately. This action
-                      cannot be undone in the current release.
-                    </p>
-                  </div>
-                </div>
+            <SheetHeader className="gap-3 border-b border-border/60 pb-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" size="xs" className="w-fit bg-background">
+                  Task details
+                </Badge>
+                <Badge variant="muted" size="xs">
+                  {formatTaskStatusLabel(task.status)}
+                </Badge>
               </div>
-            ) : null}
+              <div className="space-y-1.5">
+                <SheetTitle>{task.title}</SheetTitle>
+                <SheetDescription>
+                  {task.description ?? "No description available yet."}
+                </SheetDescription>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" size="xs" className="bg-background">
+                  {assigneeLabel}
+                </Badge>
+                <Badge variant="muted" size="xs">
+                  {getTaskDueLabel(task.dueDate)}
+                </Badge>
+              </div>
+            </SheetHeader>
 
-            <SheetFooter className="border-t border-border/60 pt-4">
-              {confirmDelete ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setConfirmDelete(false)}
-                    disabled={isDeletePending}
-                  >
-                    Keep task
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => {
-                      void handleDelete();
-                    }}
-                    disabled={isDeletePending}
-                  >
-                    {isDeletePending ? (
-                      <>
-                        <LoaderCircle className="size-3.5 animate-spin" />
-                        Deleting
-                      </>
-                    ) : (
-                      <>
+            <Tabs
+              value={activeViewTab}
+              onValueChange={(value) =>
+                setActiveViewTab(value as "overview" | "activity")
+              }
+              className="grid gap-4"
+            >
+              <TabsList
+                aria-label="Task drawer sections"
+                className="grid w-full grid-cols-2 rounded-[1rem] bg-surface-subtle/85"
+              >
+                <TabsTrigger value="overview" className="w-full">
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger value="activity" className="w-full">
+                  Activity
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="overview" className="grid gap-4">
+                <TaskPreviewPanel
+                  memberLookup={memberLookup}
+                  task={task}
+                  presentation="sheet"
+                />
+
+                {confirmDelete ? (
+                  <div className="rounded-[1rem] border border-destructive/20 bg-destructive/5 px-3.5 py-3">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+                      <div className="space-y-1.5">
+                        <p className="text-sm font-semibold text-destructive">
+                          Delete this task?
+                        </p>
+                        <p className="text-sm leading-5 text-destructive/90">
+                          This removes the card from the board immediately. This action
+                          cannot be undone in the current release.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <SheetFooter className="border-t border-border/60 pt-4">
+                  {confirmDelete ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() => setConfirmDelete(false)}
+                        disabled={isDeletePending}
+                      >
+                        Keep task
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="rounded-xl"
+                        onClick={() => {
+                          void handleDelete();
+                        }}
+                        disabled={isDeletePending}
+                      >
+                        {isDeletePending ? (
+                          <>
+                            <LoaderCircle className="size-3.5 animate-spin" />
+                            Deleting
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="size-3.5" />
+                            Confirm delete
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() => setConfirmDelete(true)}
+                        disabled={isPending}
+                      >
                         <Trash2 className="size-3.5" />
                         Delete task
-                      </>
-                    )}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setConfirmDelete(true)}
-                    disabled={isPending}
-                  >
-                    <Trash2 className="size-3.5" />
-                    Delete task
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => onModeChange("edit")}
-                    disabled={isPending}
-                  >
-                    <PencilLine className="size-3.5" />
-                    Edit task
-                  </Button>
-                </>
-              )}
-            </SheetFooter>
+                      </Button>
+                      <Button
+                        type="button"
+                        className="rounded-xl"
+                        onClick={() => onModeChange("edit")}
+                        disabled={isPending}
+                      >
+                        <PencilLine className="size-3.5" />
+                        Edit task
+                      </Button>
+                    </>
+                  )}
+                </SheetFooter>
+              </TabsContent>
+
+              <TabsContent value="activity">
+                <TaskLogsTimeline
+                  entries={taskLogEntries}
+                  hasMore={taskLogsQuery.hasNextPage ?? false}
+                  isFetchingMore={taskLogsQuery.isFetchingNextPage}
+                  isLoading={taskLogsQuery.isPending}
+                  errorMessage={taskLogsQuery.isError ? "Try the request again to load the latest task history." : null}
+                  onLoadMore={() => {
+                    void taskLogsQuery.fetchNextPage();
+                  }}
+                  onRetry={() => {
+                    void taskLogsQuery.refetch();
+                  }}
+                />
+              </TabsContent>
+            </Tabs>
           </div>
         ) : null}
       </SheetContent>

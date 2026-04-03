@@ -7,11 +7,12 @@ import {
   BoardLaneEmptyState,
 } from "@/features/tasks/components/board-column";
 import { DraggableTaskCard } from "@/features/tasks/components/draggable-task-card";
-import type { BoardLane } from "@/features/tasks/lib/task-board";
+import type { BoardLane, TaskMemberLookup } from "@/features/tasks/lib/task-board";
 import { cn } from "@/lib/utils";
 
 type KanbanBoardLaneProps = {
   lane: BoardLane;
+  memberLookup?: TaskMemberLookup;
   onAddTask: (status: TaskStatus) => void;
   onOpenTask: (task: TaskCardData) => void;
   presentation: "desktop" | "mobile";
@@ -19,6 +20,7 @@ type KanbanBoardLaneProps = {
 
 export function KanbanBoardLane({
   lane,
+  memberLookup,
   onAddTask,
   onOpenTask,
   presentation,
@@ -49,6 +51,7 @@ export function KanbanBoardLane({
         lane.tasks.map((task) => (
           <DraggableTaskCard
             key={task.id}
+            memberLookup={memberLookup}
             task={task}
             onOpen={() => onOpenTask(task)}
           />

@@ -91,7 +91,7 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
   }
 
   return (
-    <div className="flex min-h-screen bg-shell-inset">
+    <div className="flex min-h-screen bg-linear-to-br from-shell-inset via-background to-background">
       <Sidebar>
         <SidebarHeader className="space-y-4">
           <div className="flex items-center group-data-[state=collapsed]/sidebar:justify-center">
@@ -110,7 +110,7 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
               trigger={
                 <Button
                   size="default"
-                  className="w-full justify-start rounded-xl font-semibold shadow-none"
+                  className="w-full justify-start rounded-[1rem] font-semibold shadow-none"
                 >
                   <Plus className="mr-2 size-4" />
                   Create project
@@ -123,7 +123,7 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
               trigger={
                 <Button
                   size="icon"
-                  className="rounded-xl shadow-none"
+                  className="rounded-[1rem] shadow-none"
                   aria-label="Create project"
                 >
                   <Plus className="size-4" />
@@ -192,11 +192,11 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
       </Sidebar>
 
       <SidebarInset>
-        <header className="sticky top-0 z-20 bg-muted/30 px-4 pt-4 pb-4 backdrop-blur-md sm:px-6 sm:py-5 border-b border-border/40">
+        <header className="sticky top-0 z-20 border-b border-border/50 bg-background/82 px-4 pt-4 pb-4 backdrop-blur-md sm:px-6 sm:py-5">
           <div className="flex items-center justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <SidebarTrigger />
-              <div className="min-w-0 pl-1">
+              <div className="min-w-0 rounded-[1rem] border border-border/60 bg-card/90 px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                 <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                   Workspace
                 </p>
@@ -213,7 +213,7 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="min-w-[16rem] justify-between rounded-md bg-background border-border/80 text-muted-foreground shadow-sm xl:min-w-[20rem] hover:bg-accent hover:text-accent-foreground"
+                      className="min-w-[16rem] justify-between rounded-[1rem] bg-background border-border/80 text-muted-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] xl:min-w-[20rem] hover:bg-accent hover:text-accent-foreground"
                     >
                       <span className="flex items-center gap-2 text-[13px]">
                         <Search className="size-4" />
@@ -235,7 +235,7 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                       <Button
                         variant="outline"
                         size="icon"
-                        className="rounded-md bg-background shadow-sm border-border/80 text-muted-foreground size-8"
+                        className="size-8 rounded-[0.95rem] border-border/80 bg-background text-muted-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
                         aria-label="Quick create project"
                       >
                         <Plus className="size-[1.05rem]" />
@@ -251,7 +251,7 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="rounded-md bg-background shadow-sm border-border/80 text-muted-foreground md:hidden size-9"
+                    className="size-9 rounded-[0.95rem] border-border/80 bg-background text-muted-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] md:hidden"
                     aria-label="Search workspace"
                   >
                     <Search className="size-[1.1rem]" />
@@ -265,7 +265,7 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="rounded-md bg-background shadow-sm border-border/80 text-muted-foreground size-8"
+                    className="size-8 rounded-[0.95rem] border-border/80 bg-background text-muted-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
                     aria-label="Notifications"
                   >
                     <Bell className="size-[1.1rem]" />

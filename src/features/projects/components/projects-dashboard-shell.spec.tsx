@@ -38,6 +38,7 @@ vi.mock("lucide-react", () => {
     LoaderCircle: Icon,
     Plus: Icon,
     RefreshCcw: Icon,
+    Sparkles: Icon,
     X: Icon,
   };
 });
@@ -231,8 +232,44 @@ describe("ProjectsDashboardShell", () => {
     ).toBeGreaterThan(0);
     expect(screen.getByText("Open")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /open board/i }),
-    ).toBeInTheDocument();
+      screen.getAllByRole("link", { name: /open board/i }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("renders projects without any dashboard preview surface", async () => {
+    getProjectsMock.mockResolvedValueOnce({
+      items: [
+        {
+          id: "launch-planning",
+          name: "Launch planning",
+          description: "Coordinate the release work across the team.",
+          role: "OWNER",
+          taskCounts: {
+            TODO: 4,
+            IN_PROGRESS: 2,
+            DONE: 5,
+          },
+        },
+        {
+          id: "qa-readiness",
+          name: "QA readiness",
+          description: "Track validation and smoke checks.",
+          role: "OWNER",
+          taskCounts: {
+            TODO: 1,
+            IN_PROGRESS: 3,
+            DONE: 2,
+          },
+        },
+      ],
+    });
+
+    renderDashboard();
+
+    expect(await screen.findByText("QA readiness")).toBeInTheDocument();
+    expect(screen.queryByText(/project preview/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^preview$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /select preview/i })).not.toBeInTheDocument();
   });
 
   it("renders the empty state when there are no accessible projects", async () => {
@@ -291,8 +328,8 @@ describe("ProjectsDashboardShell", () => {
     renderDashboard();
 
     expect(
-      await screen.findByRole("link", { name: /open board/i }),
-    ).toBeInTheDocument();
+      (await screen.findAllByRole("link", { name: /open board/i })).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.click(
       screen.getAllByRole("button", { name: /^create project$/i })[0],
