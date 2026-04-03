@@ -3,29 +3,46 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 type BoardContainerProps = {
   desktopChildren: ReactNode;
+  density?: "default" | "compact";
   mobileChildren: ReactNode;
 };
 
 export function BoardContainer({
   desktopChildren,
+  density = "default",
   mobileChildren,
 }: BoardContainerProps) {
   const isDesktop = useIsDesktopViewport();
 
   return (
     <section
-      className="rounded-[1.2rem] border border-border/70 bg-linear-to-b from-background via-background to-surface-subtle/45 p-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-3"
+      className={cn(
+        "rounded-[1.2rem] border border-border/70 bg-linear-to-b from-background via-background to-surface-subtle/45 shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+        density === "compact" ? "p-2 sm:p-2.5" : "p-2.5 sm:p-3",
+      )}
       aria-label="Task board"
     >
       {isDesktop ? (
         <ScrollArea className="w-full" data-testid="board-lanes-scroll-area">
-          <div className="flex min-w-max gap-3 pb-1">{desktopChildren}</div>
+          <div
+            className={
+              density === "compact"
+                ? "flex min-w-max gap-2.5 pb-1"
+                : "flex min-w-max gap-3 pb-1"
+            }
+          >
+            {desktopChildren}
+          </div>
         </ScrollArea>
       ) : (
-        <div className="grid gap-2.5" data-testid="mobile-board-lane-stack">
+        <div
+          className={density === "compact" ? "grid gap-2" : "grid gap-2.5"}
+          data-testid="mobile-board-lane-stack"
+        >
           {mobileChildren}
         </div>
       )}

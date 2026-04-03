@@ -44,7 +44,7 @@ Core framework and UI:
 State and data flow:
 
 - TanStack Query for server-state caching and invalidation
-- Axios for typed HTTP access
+- Axios for typed HTTP access (different version when making the app, the news where out that axios latest version is corrupt so i used the version that is a little lower but still latest)
 - local component state for transient drawer and interaction state
 
 Interaction and feedback:

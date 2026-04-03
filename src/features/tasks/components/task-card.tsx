@@ -14,6 +14,7 @@ import {
 } from "@/features/tasks/lib/task-board";
 
 type TaskCardProps = {
+  density?: "default" | "compact";
   dragHandle?: ReactNode;
   isDragging?: boolean;
   memberLookup?: TaskMemberLookup;
@@ -22,6 +23,7 @@ type TaskCardProps = {
 };
 
 export function TaskCard({
+  density = "default",
   dragHandle,
   isDragging = false,
   memberLookup,
@@ -34,11 +36,21 @@ export function TaskCard({
   return (
     <article
       className={cn(
-        "grid h-full min-h-[11.25rem] cursor-grab grid-rows-[auto_1fr_auto] gap-3 rounded-[0.95rem] border border-border/70 bg-linear-to-br from-background via-background to-surface-subtle/45 px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[transform,border-color,box-shadow,background-color,opacity] duration-150 hover:-translate-y-0.5 hover:border-primary/20 hover:bg-card hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)] active:cursor-grabbing",
+        "grid h-full cursor-grab grid-rows-[auto_1fr_auto] border border-border/70 bg-linear-to-br from-background via-background to-surface-subtle/45 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[transform,border-color,box-shadow,background-color,opacity] duration-150 hover:-translate-y-0.5 hover:border-primary/20 hover:bg-card hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)] active:cursor-grabbing",
+        density === "compact"
+          ? "min-h-[9.6rem] gap-2.5 rounded-[0.9rem] px-2.5 py-2.5"
+          : "min-h-[11.25rem] gap-3 rounded-[0.95rem] px-3 py-3",
         isDragging && "border-primary/30 bg-card opacity-75 shadow-[0_20px_40px_rgba(15,23,42,0.12)]",
       )}
     >
-      <header className="grid grid-cols-[minmax(0,1fr)_3rem] items-start gap-3">
+      <header
+        className={cn(
+          "grid items-start gap-3",
+          density === "compact"
+            ? "grid-cols-[minmax(0,1fr)_2.5rem]"
+            : "grid-cols-[minmax(0,1fr)_3rem]",
+        )}
+      >
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <Badge variant={getLaneBadgeVariant(task.status)} size="xs">
             {formatTaskStatusLabel(task.status)}
@@ -52,12 +64,22 @@ export function TaskCard({
           </Badge>
         </div>
 
-        <div className="flex w-12 shrink-0 items-start justify-end gap-2">
+        <div
+          className={cn(
+            "flex shrink-0 items-start justify-end gap-2",
+            density === "compact" ? "w-10" : "w-12",
+          )}
+        >
           {dragHandle}
           <div
             role="img"
             aria-label={`Assignee ${assigneeLabel}`}
-            className="grid size-8 place-items-center rounded-[0.85rem] border border-border/70 bg-card text-[10px] font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+            className={cn(
+              "grid place-items-center border border-border/70 bg-card font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+              density === "compact"
+                ? "size-7 rounded-[0.75rem] text-[9px]"
+                : "size-8 rounded-[0.85rem] text-[10px]",
+            )}
             title={assigneeLabel}
           >
             {assigneeInitials}
@@ -67,24 +89,54 @@ export function TaskCard({
 
       <button
         type="button"
-        className="grid min-w-0 content-start gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className={cn(
+          "grid min-w-0 content-start text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+          density === "compact" ? "gap-[0.3125rem]" : "gap-1.5",
+        )}
         onClick={onOpen}
       >
-        <h4 className="line-clamp-2 text-sm font-semibold leading-5 text-foreground">
+        <h4
+          className={cn(
+            "line-clamp-2 font-semibold text-foreground",
+            density === "compact" ? "text-[13px] leading-[1.15rem]" : "text-sm leading-5",
+          )}
+        >
           {task.title}
         </h4>
-        <p className="line-clamp-2 text-[12px] leading-5 text-muted-foreground">
+        <p
+          className={cn(
+            "line-clamp-2 text-muted-foreground",
+            density === "compact"
+              ? "text-[11px] leading-[1.05rem]"
+              : "text-[12px] leading-5",
+          )}
+        >
           {task.description ?? "No description available yet."}
         </p>
       </button>
 
-      <footer className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 border-t border-border/60 pt-2">
+      <footer
+        className={cn(
+          "grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 border-t border-border/60",
+          density === "compact" ? "pt-1.5" : "pt-2",
+        )}
+      >
         <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-            <Clock3 className="size-3.5 text-primary" />
+          <p
+            className={cn(
+              "flex items-center gap-1.5 font-semibold tracking-[0.16em] text-muted-foreground uppercase",
+              density === "compact" ? "text-[9px]" : "text-[10px]",
+            )}
+          >
+            <Clock3 className={cn("text-primary", density === "compact" ? "size-3" : "size-3.5")} />
             Recent activity
           </p>
-          <p className="mt-1 truncate text-[11px] font-medium text-foreground">
+          <p
+            className={cn(
+              "mt-1 truncate font-medium text-foreground",
+              density === "compact" ? "text-[10px]" : "text-[11px]",
+            )}
+          >
             {getTaskUpdatedLabel(task.updatedAt)}
           </p>
         </div>

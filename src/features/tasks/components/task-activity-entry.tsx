@@ -21,29 +21,37 @@ type ActivityEntry = Pick<
 };
 
 type TaskActivityEntryProps = {
+  density?: "default" | "compact";
   entry: ActivityEntry;
   showTaskTitle?: boolean;
 };
 
 export function TaskActivityEntry({
+  density = "default",
   entry,
   showTaskTitle = false,
 }: TaskActivityEntryProps) {
   const fieldLabel = entry.fieldName ? getTaskActivityFieldLabel(entry.fieldName) : null;
 
   return (
-    <article className="rounded-[1rem] border border-border/70 bg-card px-3.5 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <div className="flex items-start gap-2.5">
+    <article
+      className={cn(
+        "rounded-[1rem] border border-border/70 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+        density === "compact" ? "px-3 py-3" : "px-3.5 py-3.5",
+      )}
+    >
+      <div className={cn("flex items-start", density === "compact" ? "gap-2" : "gap-2.5")}>
         <div
           className={cn(
-            "mt-0.5 grid size-8 shrink-0 place-items-center rounded-[0.85rem] border",
+            "mt-0.5 grid shrink-0 place-items-center rounded-[0.85rem] border",
+            density === "compact" ? "size-7" : "size-8",
             getEventIconSurfaceClassName(entry.eventType),
           )}
         >
           {getEventIconNode(entry.eventType)}
         </div>
 
-        <div className="min-w-0 flex-1 space-y-2.5">
+        <div className={cn("min-w-0 flex-1", density === "compact" ? "space-y-2" : "space-y-2.5")}>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={getEventBadgeVariant(entry.eventType)} size="xs">
               {getTaskActivityEventLabel(entry.eventType)}
@@ -61,27 +69,43 @@ export function TaskActivityEntry({
           </div>
 
           <div className="space-y-1">
-            <p className="text-sm font-semibold leading-5 text-foreground">
+            <p
+              className={cn(
+                "font-semibold text-foreground",
+                density === "compact" ? "text-[13px] leading-[1.2rem]" : "text-sm leading-5",
+              )}
+            >
               {entry.summary}
             </p>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+            <div
+              className={cn(
+                "flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground",
+                density === "compact" ? "text-[10px]" : "text-[11px]",
+              )}
+            >
               <span>{entry.actor.name}</span>
               <span aria-hidden="true">•</span>
               <span className="inline-flex items-center gap-1">
-                <Clock3 className="size-3.5" />
+                <Clock3 className={density === "compact" ? "size-3" : "size-3.5"} />
                 {formatTaskActivityTimestamp(entry.createdAt)}
               </span>
             </div>
           </div>
 
-          {entry.fieldName ? <TaskActivityChange entry={entry} /> : null}
+          {entry.fieldName ? <TaskActivityChange density={density} entry={entry} /> : null}
         </div>
       </div>
     </article>
   );
 }
 
-function TaskActivityChange({ entry }: { entry: ActivityEntry }) {
+function TaskActivityChange({
+  density,
+  entry,
+}: {
+  density: "default" | "compact";
+  entry: ActivityEntry;
+}) {
   const fieldName = entry.fieldName;
 
   if (!fieldName) {
@@ -94,8 +118,18 @@ function TaskActivityChange({ entry }: { entry: ActivityEntry }) {
     typeof entry.newValue === "string"
   ) {
     return (
-      <section className="flex flex-wrap items-center gap-2 rounded-[0.9rem] border border-border/70 bg-surface-subtle/55 px-2.5 py-2">
-        <span className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+      <section
+        className={cn(
+          "flex flex-wrap items-center gap-2 rounded-[0.9rem] border border-border/70 bg-surface-subtle/55",
+          density === "compact" ? "px-2 py-1.5" : "px-2.5 py-2",
+        )}
+      >
+        <span
+          className={cn(
+            "font-semibold tracking-[0.16em] text-muted-foreground uppercase",
+            density === "compact" ? "text-[9px]" : "text-[10px]",
+          )}
+        >
           Transition
         </span>
           <Badge variant={getStatusBadgeVariant(entry.oldValue as TaskStatus)} size="xs">
@@ -110,18 +144,35 @@ function TaskActivityChange({ entry }: { entry: ActivityEntry }) {
   }
 
   return (
-    <section className="rounded-[0.9rem] border border-border/70 bg-surface-subtle/55 p-2.5">
-      <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+    <section
+      className={cn(
+        "rounded-[0.9rem] border border-border/70 bg-surface-subtle/55",
+        density === "compact" ? "p-2" : "p-2.5",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center gap-2 font-semibold tracking-[0.18em] text-muted-foreground uppercase",
+          density === "compact" ? "text-[10px]" : "text-[11px]",
+        )}
+      >
         {getFieldIcon(fieldName)}
         Field change
       </div>
-      <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+      <div
+        className={cn(
+          "grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center",
+          density === "compact" ? "mt-1.5" : "mt-2",
+        )}
+      >
         <ActivityValueCard
+          density={density}
           label="Before"
           value={formatTaskActivityValue(fieldName, entry.oldValue)}
         />
         <ArrowRight className="mx-auto size-4 text-muted-foreground" />
         <ActivityValueCard
+          density={density}
           label="After"
           value={formatTaskActivityValue(fieldName, entry.newValue)}
         />
@@ -131,18 +182,37 @@ function TaskActivityChange({ entry }: { entry: ActivityEntry }) {
 }
 
 function ActivityValueCard({
+  density,
   label,
   value,
 }: {
+  density: "default" | "compact";
   label: string;
   value: string;
 }) {
   return (
-    <div className="min-w-0 rounded-[0.85rem] border border-border/70 bg-background/90 px-2.5 py-2">
-      <p className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+    <div
+      className={cn(
+        "min-w-0 rounded-[0.85rem] border border-border/70 bg-background/90",
+        density === "compact" ? "px-2 py-1.5" : "px-2.5 py-2",
+      )}
+    >
+      <p
+        className={cn(
+          "font-semibold tracking-[0.16em] text-muted-foreground uppercase",
+          density === "compact" ? "text-[9px]" : "text-[10px]",
+        )}
+      >
         {label}
       </p>
-      <p className="mt-1 truncate text-sm text-foreground">{value}</p>
+      <p
+        className={cn(
+          "mt-1 truncate text-foreground",
+          density === "compact" ? "text-[12px]" : "text-sm",
+        )}
+      >
+        {value}
+      </p>
     </div>
   );
 }

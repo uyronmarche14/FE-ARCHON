@@ -11,9 +11,11 @@ type BoardColumnProps = {
   children: ReactNode;
   count: number;
   dataTestId?: string;
+  density?: "default" | "compact";
   description: string;
   onAddTask: () => void;
   presentation?: "desktop" | "mobile";
+  showActions?: boolean;
   status: TaskStatus;
   title: string;
 };
@@ -26,9 +28,11 @@ export const BoardColumn = React.forwardRef<HTMLElement, BoardColumnProps>(
       className,
       count,
       dataTestId,
+      density = "default",
       description,
       onAddTask,
       presentation = "desktop",
+      showActions = true,
       status,
       title,
     },
@@ -40,14 +44,20 @@ export const BoardColumn = React.forwardRef<HTMLElement, BoardColumnProps>(
         data-testid={dataTestId}
         className={cn(
           "min-w-0 overflow-hidden rounded-[1.2rem] border border-border/70 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
-          presentation === "desktop" ? "w-[20.5rem] shrink-0" : "w-full",
+          presentation === "desktop"
+            ? density === "compact"
+              ? "w-[18.5rem] shrink-0 rounded-[1rem]"
+              : "w-[20.5rem] shrink-0"
+            : "w-full",
           className,
         )}
       >
         <BoardColumnHeader
           count={count}
+          density={density}
           description={description}
           onAddTask={onAddTask}
+          showActions={showActions}
           status={status}
           title={title}
         />
@@ -61,58 +71,86 @@ BoardColumn.displayName = "BoardColumn";
 
 type BoardColumnHeaderProps = {
   count: number;
+  density: "default" | "compact";
   description: string;
   onAddTask: () => void;
+  showActions: boolean;
   status: TaskStatus;
   title: string;
 };
 
 export function BoardColumnHeader({
   count,
+  density,
   description,
   onAddTask,
+  showActions,
   status,
   title,
 }: BoardColumnHeaderProps) {
   return (
-    <header className="sticky top-0 z-10 border-b border-border/60 bg-card/95 px-3.5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/90">
-      <div className="flex min-h-[4.8rem] items-start justify-between gap-3">
+    <header
+      className={cn(
+        "sticky top-0 z-10 border-b border-border/60 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90",
+        density === "compact" ? "px-3 py-2.5" : "px-3.5 py-3",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-start justify-between gap-3",
+          density === "compact" ? "min-h-[4.15rem]" : "min-h-[4.8rem]",
+        )}
+      >
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
             <span className={cn("size-2.5 rounded-full", getLaneDotClassName(status))} />
-            <h3 className="text-sm font-semibold tracking-tight text-foreground">
+            <h3
+              className={cn(
+                "font-semibold tracking-tight text-foreground",
+                density === "compact" ? "text-[13px]" : "text-sm",
+              )}
+            >
               {title}
             </h3>
             <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
               {count}
             </span>
           </div>
-          <p className="line-clamp-2 pr-6 text-xs leading-5 text-muted-foreground">
+          <p
+            className={cn(
+              "line-clamp-2 pr-6 text-muted-foreground",
+              density === "compact"
+                ? "text-[11px] leading-[1.125rem]"
+                : "text-xs leading-5",
+            )}
+          >
             {description}
           </p>
         </div>
 
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="rounded-lg text-muted-foreground"
-            aria-label={`Add task to ${title}`}
-            onClick={onAddTask}
-          >
-            <Plus className="size-3.5" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="rounded-lg text-muted-foreground"
-            aria-label={`${title} lane options`}
-          >
-            <MoreHorizontal className="size-3.5" />
-          </Button>
-        </div>
+        {showActions ? (
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="rounded-lg text-muted-foreground"
+              aria-label={`Add task to ${title}`}
+              onClick={onAddTask}
+            >
+              <Plus className="size-3.5" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="rounded-lg text-muted-foreground"
+              aria-label={`${title} lane options`}
+            >
+              <MoreHorizontal className="size-3.5" />
+            </Button>
+          </div>
+        ) : null}
       </div>
     </header>
   );
