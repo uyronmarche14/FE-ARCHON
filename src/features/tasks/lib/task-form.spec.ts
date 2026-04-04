@@ -17,10 +17,17 @@ const existingTask: TaskCard = {
     name: "In Progress",
     position: 2,
     isClosed: false,
+    color: "BLUE",
   },
+  acceptanceCriteria: null,
+  notes: null,
+  parentTaskId: null,
   position: null,
   assigneeId: "member-1",
   dueDate: "2026-04-10",
+  links: [],
+  checklistItems: [],
+  subtasks: [],
   createdAt: "2026-04-02T09:00:00.000Z",
   updatedAt: "2026-04-02T10:00:00.000Z",
 };
@@ -31,9 +38,13 @@ describe("task-form", () => {
       normalizeCreateTaskFormValues({
         title: "  Prepare   smoke notes  ",
         description: "  Capture launch checks.  ",
+        acceptanceCriteria: "",
+        notes: "",
         statusId: "status-done",
         assigneeId: " member-1 ",
         dueDate: " 2026-04-12 ",
+        links: [],
+        checklistItems: [],
       }),
     ).toEqual({
       title: "Prepare smoke notes",
@@ -49,9 +60,13 @@ describe("task-form", () => {
       validateTaskFormValues({
         title: "   ",
         description: "",
+        acceptanceCriteria: "",
+        notes: "",
         statusId: "status-todo",
         assigneeId: "",
         dueDate: "not-a-date",
+        links: [],
+        checklistItems: [],
       }),
     ).toEqual({
       title: "Task title is required.",
@@ -64,12 +79,16 @@ describe("task-form", () => {
       validateTaskFormValues({
         title: "Prepare smoke notes",
         description: "x".repeat(5001),
+        acceptanceCriteria: "",
+        notes: "",
         statusId: "status-todo",
         assigneeId: "",
         dueDate: "",
+        links: [],
+        checklistItems: [],
       }),
     ).toEqual({
-      description: "Task description must be 5000 characters or fewer.",
+      description: "Summary must be 5000 characters or fewer.",
     });
   });
 
@@ -78,9 +97,13 @@ describe("task-form", () => {
       buildUpdateTaskRequest(existingTask, {
         title: "Wire refresh token flow",
         description: "",
+        acceptanceCriteria: "",
+        notes: "",
         statusId: "status-progress",
         assigneeId: "",
         dueDate: "",
+        links: [],
+        checklistItems: [],
       }),
     ).toEqual({
       description: null,
@@ -94,9 +117,13 @@ describe("task-form", () => {
       buildUpdateTaskRequest(existingTask, {
         title: "  Wire   refresh token flow ",
         description: "Keep session bootstrap calm during auth routing.",
+        acceptanceCriteria: "",
+        notes: "",
         statusId: "status-progress",
         assigneeId: "member-1",
         dueDate: "2026-04-10",
+        links: [],
+        checklistItems: [],
       }),
     ).toBeNull();
   });

@@ -1,21 +1,40 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, LoaderCircle, PencilLine, Trash2 } from "lucide-react";
-import type { CreateTaskRequest, TaskCard, TaskStatus, UpdateTaskRequest } from "@/contracts/tasks";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  LoaderCircle,
+  PencilLine,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import type {
+  CreateTaskRequest,
+  ProjectTaskStatus,
+  TaskCard,
+  TaskStatus,
+  UpdateTaskRequest,
+} from "@/contracts/tasks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
-  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useDeleteTask } from "@/features/tasks/hooks/use-delete-task";
 import { useProjectMembers } from "@/features/tasks/hooks/use-project-members";
 import { useTaskLogs } from "@/features/tasks/hooks/use-task-logs";
+import { useUpdateTaskStatus } from "@/features/tasks/hooks/use-update-task-status";
+import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
+import { TaskAttachmentsPanel } from "@/features/tasks/components/task-attachments-panel";
+import { TaskCommentsPanel } from "@/features/tasks/components/task-comments-panel";
 import { TaskForm } from "@/features/tasks/components/task-form";
 import { TaskLogsTimeline } from "@/features/tasks/components/task-logs-timeline";
 import { TaskPreviewPanel } from "@/features/tasks/components/task-preview-panel";
@@ -32,10 +51,18 @@ import {
   formatTaskStatusLabel,
   getTaskAssigneeLabel,
   getTaskDueLabel,
+  getTaskPositionLabel,
+  getTaskStatusBadgeClassName,
+  getTaskUpdatedLabel,
   type TaskMemberLookup,
 } from "@/features/tasks/lib/task-board";
+import {
+  projectTasksQueryKey,
+  taskLogsQueryKey,
+} from "@/features/tasks/lib/task-query-keys";
 import { isApiClientError } from "@/services/http/api-client-error";
-import { showApiErrorToast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
+import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
 
 type TaskDrawerProps = {
   open: boolean;
@@ -52,8 +79,16 @@ type TaskDrawerProps = {
   onModeChange: (mode: "edit" | "view") => void;
   onOpenChange: (open: boolean) => void;
   onCreate: (request: CreateTaskRequest) => Promise<void>;
+  onStatusChange: (taskId: string, statusId: string) => Promise<void>;
   onUpdate: (task: TaskCard, request: UpdateTaskRequest) => Promise<void>;
 };
+
+type TaskDrawerViewTab =
+  | "task"
+  | "subtasks"
+  | "comments"
+  | "activity"
+  | "attachments";
 
 export function TaskDrawer({
   open,
@@ -70,12 +105,16 @@ export function TaskDrawer({
   onModeChange,
   onOpenChange,
   onCreate,
+  onStatusChange,
   onUpdate,
 }: TaskDrawerProps) {
-  const membersQuery = useProjectMembers(projectId, open && mode !== "view");
-  const [activeViewTab, setActiveViewTab] = useState<"overview" | "activity">(
-    "overview",
-  );
+  const queryClient = useQueryClient();
+  const membersQuery = useProjectMembers(projectId, open);
+  const createSubtaskMutation = useCreateTask(projectId);
+  const updateSubtaskStatusMutation = useUpdateTaskStatus();
+  const deleteSubtaskMutation = useDeleteTask();
+  const [activeViewTab, setActiveViewTab] =
+    useState<TaskDrawerViewTab>("task");
   const taskLogsQuery = useTaskLogs(
     task?.id ?? "",
     open && mode === "view" && task !== null && activeViewTab === "activity",
@@ -88,10 +127,16 @@ export function TaskDrawer({
   const [fieldErrors, setFieldErrors] = useState<TaskFormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [newSubtaskStatusId, setNewSubtaskStatusId] = useState(
+    statuses[0]?.id ?? initialStatusId,
+  );
 
   const isPending = isCreatePending || isUpdatePending || isDeletePending;
   const assigneeLabel =
-    task !== null ? getTaskAssigneeLabel(task.assigneeId, memberLookup) : "Unassigned";
+    task !== null
+      ? getTaskAssigneeLabel(task.assigneeId, memberLookup)
+      : "Unassigned";
   const updateRequest = useMemo(
     () => (mode === "edit" && task ? buildUpdateTaskRequest(task, formValues) : null),
     [formValues, mode, task],
@@ -165,72 +210,227 @@ export function TaskDrawer({
     }
   }
 
-  return (
-    <Sheet
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen && isPending) {
-          return;
-        }
+  async function handleRootStatusChange(nextStatusId: string) {
+    if (!task || nextStatusId === task.statusId) {
+      return;
+    }
 
-        onOpenChange(nextOpen);
-      }}
-    >
-      <SheetContent className="w-[calc(100vw-1rem)] max-w-none overflow-y-auto px-4 py-4 sm:w-[calc(100vw-2rem)] sm:px-5 sm:py-5 md:w-[34vw] xl:w-[34rem]">
+    try {
+      await onStatusChange(task.id, nextStatusId);
+      await queryClient.invalidateQueries({
+        queryKey: taskLogsQueryKey(task.id),
+      });
+      showSuccessToast("Status updated", "The task moved to the new workflow stage.");
+    } catch (error) {
+      showApiErrorToast(error, "Unable to update the task status right now.");
+    }
+  }
+
+  async function handleCreateSubtask() {
+    if (!task || newSubtaskTitle.trim().length === 0) {
+      return;
+    }
+
+    try {
+      const createdSubtask = await createSubtaskMutation.mutateAsync({
+        title: newSubtaskTitle.trim(),
+        parentTaskId: task.id,
+        statusId: newSubtaskStatusId || statuses[0]?.id,
+      });
+
+      queryClient.setQueryData<ProjectTaskStatus[] | undefined>(
+        projectTasksQueryKey(projectId),
+        undefined,
+      );
+      queryClient.setQueryData(
+        projectTasksQueryKey(projectId),
+        (currentTaskResponse: { statuses: ProjectTaskStatus[] } | undefined) =>
+          currentTaskResponse
+            ? {
+                statuses: currentTaskResponse.statuses.map((status) => ({
+                  ...status,
+                  tasks: status.tasks.map((laneTask) =>
+                    laneTask.id === task.id
+                      ? {
+                          ...laneTask,
+                          subtasks: [...laneTask.subtasks, createdSubtask].sort((left, right) =>
+                            new Date(left.createdAt).getTime() -
+                            new Date(right.createdAt).getTime(),
+                          ),
+                        }
+                      : laneTask,
+                  ),
+                })),
+              }
+            : currentTaskResponse,
+      );
+
+      setNewSubtaskTitle("");
+      setNewSubtaskStatusId(statuses[0]?.id ?? initialStatusId);
+      void queryClient.invalidateQueries({
+        queryKey: projectTasksQueryKey(projectId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["project", projectId, "activity"],
+      });
+      showSuccessToast("Subtask created", "The new child task is attached to this work item.");
+    } catch (error) {
+      showApiErrorToast(error, "Unable to create the subtask right now.");
+    }
+  }
+
+  async function handleSubtaskStatusChange(
+    subtaskId: string,
+    nextStatusId: string,
+  ) {
+    if (!task) {
+      return;
+    }
+
+    try {
+      const updatedSubtask = await updateSubtaskStatusMutation.mutateAsync({
+        taskId: subtaskId,
+        request: {
+          statusId: nextStatusId,
+        },
+      });
+
+      queryClient.setQueryData(
+        projectTasksQueryKey(projectId),
+        (currentTaskResponse: { statuses: ProjectTaskStatus[] } | undefined) =>
+          currentTaskResponse
+            ? {
+                statuses: currentTaskResponse.statuses.map((status) => ({
+                  ...status,
+                  tasks: status.tasks.map((laneTask) =>
+                    laneTask.id === task.id
+                      ? {
+                          ...laneTask,
+                          subtasks: laneTask.subtasks.map((subtask) =>
+                            subtask.id === subtaskId ? updatedSubtask : subtask,
+                          ),
+                        }
+                      : laneTask,
+                  ),
+                })),
+              }
+            : currentTaskResponse,
+      );
+
+      void queryClient.invalidateQueries({
+        queryKey: ["project", projectId, "activity"],
+      });
+    } catch (error) {
+      showApiErrorToast(error, "Unable to move the subtask right now.");
+    }
+  }
+
+  async function handleDeleteSubtask(subtaskId: string) {
+    if (!task) {
+      return;
+    }
+
+    try {
+      await deleteSubtaskMutation.mutateAsync(subtaskId);
+      queryClient.setQueryData(
+        projectTasksQueryKey(projectId),
+        (currentTaskResponse: { statuses: ProjectTaskStatus[] } | undefined) =>
+          currentTaskResponse
+            ? {
+                statuses: currentTaskResponse.statuses.map((status) => ({
+                  ...status,
+                  tasks: status.tasks.map((laneTask) =>
+                    laneTask.id === task.id
+                      ? {
+                          ...laneTask,
+                          subtasks: laneTask.subtasks.filter(
+                            (subtask) => subtask.id !== subtaskId,
+                          ),
+                        }
+                      : laneTask,
+                  ),
+                })),
+              }
+            : currentTaskResponse,
+      );
+
+      void queryClient.invalidateQueries({
+        queryKey: ["project", projectId, "activity"],
+      });
+      showSuccessToast("Subtask deleted", "The child task was removed.");
+    } catch (error) {
+      showApiErrorToast(error, "Unable to delete the subtask right now.");
+    }
+  }
+
+  function handleContainerOpenChange(nextOpen: boolean) {
+    if (!nextOpen && isPending) {
+      return;
+    }
+
+    onOpenChange(nextOpen);
+  }
+
+  const isCenteredTaskModal = true;
+  const modalContentClassName =
+    "overflow-hidden border-border/60 bg-card/98 p-0 shadow-[0_28px_96px_rgba(15,23,42,0.16)] !w-[min(calc(100%-1rem),58rem)] sm:!w-[min(calc(100%-2rem),58rem)]";
+
+  return (
+    <Sheet open={open} onOpenChange={handleContainerOpenChange}>
+      <SheetContent
+        side={isCenteredTaskModal ? "center" : "right"}
+        className={
+          isCenteredTaskModal
+            ? modalContentClassName
+            : "w-[calc(100vw-1rem)] max-w-none overflow-y-auto px-4 py-4 sm:w-[calc(100vw-2rem)] sm:px-5 sm:py-5 md:w-[38rem] xl:w-[42rem]"
+        }
+      >
         {mode === "create" ? (
-          <>
-            <SheetHeader className="gap-3 border-b border-border/60 pb-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" size="xs" className="w-fit bg-background">
-                  New task
-                </Badge>
-                <Badge variant="muted" size="xs">
-                  Board context stays open
-                </Badge>
-              </div>
+          <div className="max-h-[min(86vh,920px)] overflow-y-auto">
+            <SheetHeader className="gap-1.5 border-b border-border/40 px-4 py-3.5 sm:px-5 sm:py-4">
+              <p className="text-[0.68rem] font-medium uppercase tracking-[0.2em] text-muted-foreground/75">
+                Task
+              </p>
               <SheetTitle>Create task</SheetTitle>
               <SheetDescription>
-                Add a new card without leaving the board surface.
+                Capture the essentials first.
               </SheetDescription>
             </SheetHeader>
 
-            <TaskForm
-              mode="create"
-              values={formValues}
-              errors={fieldErrors}
-              members={membersQuery.data ?? []}
-              statuses={statuses}
-              membersError={
-                membersQuery.isError
-                  ? "Project members could not be loaded right now."
-                  : null
-              }
-              membersLoading={membersQuery.isPending}
-              formError={formError}
-              isPending={isCreatePending}
-              submitLabel="Create task"
-              submittingLabel="Creating"
-              onCancel={() => onOpenChange(false)}
-              onSubmit={handleSubmit}
-              onValueChange={handleFieldChange}
-            />
-          </>
+            <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+              <TaskForm
+                mode="create"
+                values={formValues}
+                errors={fieldErrors}
+                members={membersQuery.data ?? []}
+                statuses={statuses}
+                membersError={
+                  membersQuery.isError
+                    ? "Project members could not be loaded right now."
+                    : null
+                }
+                membersLoading={membersQuery.isPending}
+                formError={formError}
+                isPending={isCreatePending}
+                submitLabel="Create task"
+                submittingLabel="Creating"
+                onCancel={() => onOpenChange(false)}
+                onSubmit={handleSubmit}
+                onValueChange={handleFieldChange}
+              />
+            </div>
+          </div>
         ) : null}
 
         {mode === "edit" && task ? (
-          <>
-            <SheetHeader className="gap-3 border-b border-border/60 pb-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" size="xs" className="w-fit bg-background">
-                  Editing
-                </Badge>
-                <Badge variant="muted" size="xs">
-                  Changes stay in context
-                </Badge>
-              </div>
+          <div className="max-h-[min(86vh,920px)] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+            <SheetHeader className="gap-1.5 border-b border-border/40 pb-3">
+              <p className="text-[0.68rem] font-medium uppercase tracking-[0.2em] text-muted-foreground/75">
+                Task
+              </p>
               <SheetTitle>Edit task</SheetTitle>
               <SheetDescription>
-                Update task details without losing board context.
+                Update the work in place.
               </SheetDescription>
             </SheetHeader>
 
@@ -255,158 +455,447 @@ export function TaskDrawer({
               onSubmit={handleSubmit}
               onValueChange={handleFieldChange}
             />
-          </>
+          </div>
         ) : null}
 
         {mode === "view" && task ? (
-          <div className="grid gap-4">
-            <SheetHeader className="gap-3 border-b border-border/60 pb-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" size="xs" className="w-fit bg-background">
-                  Task details
-                </Badge>
-                <Badge variant="muted" size="xs">
-                  {formatTaskStatusLabel(task.status)}
-                </Badge>
-              </div>
-              <div className="space-y-1.5">
+          <Tabs
+            value={activeViewTab}
+            onValueChange={(value) => setActiveViewTab(value as TaskDrawerViewTab)}
+            className="grid max-h-[min(86vh,920px)] gap-2.5 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5"
+          >
+            <SheetHeader className="gap-2 border-b border-border/40 pb-3">
+              <TabsList
+                aria-label="Task drawer sections"
+                className="grid h-10 w-full grid-cols-5 rounded-[0.95rem] bg-surface-subtle/70 p-1 sm:w-fit"
+              >
+                <TabsTrigger value="task" className="w-full px-3">
+                  Task
+                </TabsTrigger>
+                <TabsTrigger value="subtasks" className="w-full px-3">
+                  Subtasks
+                </TabsTrigger>
+                <TabsTrigger value="comments" className="w-full px-3">
+                  Comments
+                </TabsTrigger>
+                <TabsTrigger value="activity" className="w-full px-3">
+                  Activity
+                </TabsTrigger>
+                <TabsTrigger value="attachments" className="w-full px-3">
+                  Files
+                </TabsTrigger>
+              </TabsList>
+              <div className="space-y-1">
                 <SheetTitle>{task.title}</SheetTitle>
                 <SheetDescription>
-                  {task.description ?? "No description available yet."}
+                  {task.description ?? "No summary available yet."}
                 </SheetDescription>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" size="xs" className="bg-background">
-                  {assigneeLabel}
-                </Badge>
-                <Badge variant="muted" size="xs">
-                  {getTaskDueLabel(task.dueDate)}
-                </Badge>
               </div>
             </SheetHeader>
 
-            <Tabs
-              value={activeViewTab}
-              onValueChange={(value) =>
-                setActiveViewTab(value as "overview" | "activity")
-              }
-              className="grid gap-4"
-            >
-              <TabsList
-                aria-label="Task drawer sections"
-                className="grid w-full grid-cols-2 rounded-[1rem] bg-surface-subtle/85"
-              >
-                <TabsTrigger value="overview" className="w-full">
-                  Overview
-                </TabsTrigger>
-                <TabsTrigger value="activity" className="w-full">
-                  Activity
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="overview" className="grid gap-4">
+            <TabsContent value="task" className="grid gap-3">
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_14.5rem] lg:items-start">
                 <TaskPreviewPanel
                   memberLookup={memberLookup}
                   task={task}
                   presentation="sheet"
                 />
 
-                {confirmDelete ? (
-                  <div className="rounded-[1rem] border border-destructive/20 bg-destructive/5 px-3.5 py-3">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
-                      <div className="space-y-1.5">
-                        <p className="text-sm font-semibold text-destructive">
-                          Delete this task?
-                        </p>
-                        <p className="text-sm leading-5 text-destructive/90">
-                          This removes the card from the board immediately. This action
-                          cannot be undone in the current release.
-                        </p>
-                      </div>
+                <aside className="space-y-2.5 lg:sticky lg:top-0">
+                  <TaskCompactRailPanel title="Workflow">
+                    <div className="space-y-2">
+                      <TaskRailField label="Status">
+                        <CompactTaskSelect
+                          ariaLabel="Task status"
+                          value={task.statusId}
+                          onChange={(event) => {
+                            void handleRootStatusChange(event.target.value);
+                          }}
+                          disabled={isPending}
+                        >
+                          {statuses.map((status) => (
+                            <option key={status.id} value={status.id}>
+                              {status.name}
+                            </option>
+                          ))}
+                        </CompactTaskSelect>
+                      </TaskRailField>
+                      <TaskRailField label="Assignee">
+                        <TaskCompactValue>{assigneeLabel}</TaskCompactValue>
+                      </TaskRailField>
+                      <TaskRailField label="Due date">
+                        <TaskCompactValue>{getTaskDueLabel(task.dueDate)}</TaskCompactValue>
+                      </TaskRailField>
                     </div>
-                  </div>
-                ) : null}
+                  </TaskCompactRailPanel>
 
-                <SheetFooter className="border-t border-border/60 pt-4">
+                  <TaskCompactRailPanel title="Context">
+                    <div className="space-y-2">
+                      <TaskRailField label="Position">
+                        <TaskCompactValue>
+                          {getTaskPositionLabel(task.position, task.status)}
+                        </TaskCompactValue>
+                      </TaskRailField>
+                      <TaskRailField label="Recent">
+                        <TaskCompactValue>{getTaskUpdatedLabel(task.updatedAt)}</TaskCompactValue>
+                      </TaskRailField>
+                    </div>
+                  </TaskCompactRailPanel>
+
                   {confirmDelete ? (
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="rounded-xl"
-                        onClick={() => setConfirmDelete(false)}
-                        disabled={isDeletePending}
-                      >
-                        Keep task
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        className="rounded-xl"
-                        onClick={() => {
-                          void handleDelete();
-                        }}
-                        disabled={isDeletePending}
-                      >
-                        {isDeletePending ? (
-                          <>
-                            <LoaderCircle className="size-3.5 animate-spin" />
-                            Deleting
-                          </>
-                        ) : (
-                          <>
-                            <Trash2 className="size-3.5" />
-                            Confirm delete
-                          </>
-                        )}
-                      </Button>
-                    </>
+                    <TaskCompactRailPanel title="Danger zone">
+                      <div className="space-y-3">
+                        <div className="rounded-[0.95rem] bg-destructive/5 px-3 py-2.5 ring-1 ring-destructive/15">
+                          <div className="flex items-start gap-2.5">
+                            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+                            <p className="text-sm leading-5 text-destructive/90">
+                              Deleting removes this task from the board immediately.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="grid gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-9 rounded-[0.95rem]"
+                            onClick={() => setConfirmDelete(false)}
+                            disabled={isDeletePending}
+                          >
+                            Keep task
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            className="h-9 rounded-[0.95rem]"
+                            onClick={() => {
+                              void handleDelete();
+                            }}
+                            disabled={isDeletePending}
+                          >
+                            {isDeletePending ? (
+                              <>
+                                <LoaderCircle className="size-3.5 animate-spin" />
+                                Deleting
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="size-3.5" />
+                                Confirm delete
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </TaskCompactRailPanel>
                   ) : (
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="rounded-xl"
-                        onClick={() => setConfirmDelete(true)}
-                        disabled={isPending}
-                      >
-                        <Trash2 className="size-3.5" />
-                        Delete task
-                      </Button>
-                      <Button
-                        type="button"
-                        className="rounded-xl"
-                        onClick={() => onModeChange("edit")}
-                        disabled={isPending}
-                      >
-                        <PencilLine className="size-3.5" />
-                        Edit task
-                      </Button>
-                    </>
+                    <TaskCompactRailPanel title="Actions">
+                      <div className="grid gap-2">
+                        <Button
+                          type="button"
+                          className="h-9 rounded-[0.95rem]"
+                          onClick={() => onModeChange("edit")}
+                        >
+                          <PencilLine className="size-3.5" />
+                          Edit task
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-9 rounded-[0.95rem] shadow-none"
+                          onClick={() => setConfirmDelete(true)}
+                          disabled={isDeletePending}
+                        >
+                          <Trash2 className="size-3.5" />
+                          Delete task
+                        </Button>
+                      </div>
+                    </TaskCompactRailPanel>
                   )}
-                </SheetFooter>
-              </TabsContent>
+                </aside>
+              </div>
+            </TabsContent>
 
-              <TabsContent value="activity">
-                <TaskLogsTimeline
-                  entries={taskLogEntries}
-                  hasMore={taskLogsQuery.hasNextPage ?? false}
-                  isFetchingMore={taskLogsQuery.isFetchingNextPage}
-                  isLoading={taskLogsQuery.isPending}
-                  errorMessage={taskLogsQuery.isError ? "Try the request again to load the latest task history." : null}
-                  onLoadMore={() => {
-                    void taskLogsQuery.fetchNextPage();
-                  }}
-                  onRetry={() => {
-                    void taskLogsQuery.refetch();
-                  }}
-                />
-              </TabsContent>
-            </Tabs>
-          </div>
+            <TabsContent value="subtasks" className="grid gap-4">
+              <TaskDetailSection
+                eyebrow="Child work"
+                title="Subtasks"
+                description="Break this work into smaller child tasks without cluttering the main board."
+                compact
+              >
+                <TaskDetailSurface className="grid gap-3">
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem_auto]">
+                    <Input
+                      value={newSubtaskTitle}
+                      placeholder="Draft the next child task"
+                      onChange={(event) => setNewSubtaskTitle(event.target.value)}
+                      disabled={createSubtaskMutation.isPending}
+                    />
+                    <Select
+                      value={newSubtaskStatusId}
+                      onChange={(event) => setNewSubtaskStatusId(event.target.value)}
+                      disabled={createSubtaskMutation.isPending}
+                    >
+                      {statuses.map((status) => (
+                        <option key={status.id} value={status.id}>
+                          {status.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        void handleCreateSubtask();
+                      }}
+                      disabled={
+                        createSubtaskMutation.isPending ||
+                        newSubtaskTitle.trim().length === 0
+                      }
+                    >
+                      {createSubtaskMutation.isPending ? (
+                        <>
+                          <LoaderCircle className="size-3.5 animate-spin" />
+                          Creating
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="size-3.5" />
+                          Add
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </TaskDetailSurface>
+
+                {task.subtasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No subtasks yet.</p>
+                ) : (
+                  <ul className="grid gap-2">
+                    {task.subtasks.map((subtask) => (
+                      <li
+                        key={subtask.id}
+                        className="grid gap-2 rounded-[0.95rem] border border-border/55 bg-background/75 px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0 space-y-0.5">
+                            <p className="text-sm font-semibold text-foreground">
+                              {subtask.title}
+                            </p>
+                            <p className="line-clamp-1 text-xs text-muted-foreground">
+                              {subtask.description ?? "No summary yet."}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => {
+                              void handleDeleteSubtask(subtask.id);
+                            }}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem]">
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              size="xs"
+                              className={getTaskStatusBadgeClassName(subtask.status)}
+                            >
+                              {formatTaskStatusLabel(subtask.status)}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {getTaskDueLabel(subtask.dueDate)}
+                            </span>
+                          </div>
+                          <Select
+                            value={subtask.statusId}
+                            onChange={(event) => {
+                              void handleSubtaskStatusChange(
+                                subtask.id,
+                                event.target.value,
+                              );
+                            }}
+                            disabled={updateSubtaskStatusMutation.isPending}
+                          >
+                            {statuses.map((status) => (
+                              <option key={status.id} value={status.id}>
+                                {status.name}
+                              </option>
+                            ))}
+                          </Select>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </TaskDetailSection>
+            </TabsContent>
+
+            <TabsContent value="comments">
+              <TaskCommentsPanel
+                enabled={activeViewTab === "comments"}
+                taskId={task.id}
+              />
+            </TabsContent>
+
+            <TabsContent value="activity" className="grid gap-4">
+              <TaskLogsTimeline
+                entries={taskLogEntries}
+                errorMessage={
+                  taskLogsQuery.isError
+                    ? "We couldn't load the activity log right now."
+                    : null
+                }
+                hasMore={taskLogsQuery.hasNextPage}
+                isFetchingMore={taskLogsQuery.isFetchingNextPage}
+                isLoading={taskLogsQuery.isPending}
+                onLoadMore={() => {
+                  void taskLogsQuery.fetchNextPage();
+                }}
+                onRetry={() => {
+                  void taskLogsQuery.refetch();
+                }}
+              />
+            </TabsContent>
+
+            <TabsContent value="attachments">
+              <TaskAttachmentsPanel
+                enabled={activeViewTab === "attachments"}
+                taskId={task.id}
+              />
+            </TabsContent>
+          </Tabs>
         ) : null}
       </SheetContent>
     </Sheet>
+  );
+}
+
+function TaskDetailSection({
+  children,
+  description,
+  eyebrow,
+  first = false,
+  compact = false,
+  title,
+}: {
+  children: React.ReactNode;
+  description: string;
+  eyebrow: string;
+  first?: boolean;
+  compact?: boolean;
+  title: string;
+}) {
+  return (
+    <section
+      className={cn(
+        compact ? "space-y-2.5" : "space-y-3",
+        !first &&
+          (compact
+            ? "border-t border-border/40 pt-3.5"
+            : "border-t border-border/45 pt-4"),
+      )}
+    >
+      <div className="space-y-1">
+        <p className="text-[0.7rem] font-medium uppercase tracking-[0.22em] text-muted-foreground/80">
+          {eyebrow}
+        </p>
+        <div className="space-y-0.5">
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          <p className="max-w-2xl text-sm leading-5 text-muted-foreground">
+            {description}
+          </p>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function TaskDetailSurface({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-[0.95rem] bg-background/88 px-3 py-2.5 ring-1 ring-border/35",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function TaskCompactRailPanel({
+  children,
+  title,
+}: {
+  children: React.ReactNode;
+  title: string;
+}) {
+  return (
+    <section className="space-y-2 rounded-[0.95rem] bg-surface-subtle/35 px-3 py-3 ring-1 ring-border/35">
+      <p className="text-[0.7rem] font-medium uppercase tracking-[0.22em] text-muted-foreground/80">
+        {title}
+      </p>
+      {children}
+    </section>
+  );
+}
+
+function TaskRailField({
+  children,
+  label,
+}: {
+  children: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function TaskCompactValue({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-[0.9rem] bg-background/88 px-3 py-2.5 ring-1 ring-border/35">
+      <p className="text-sm text-foreground/88">{children}</p>
+    </div>
+  );
+}
+
+function CompactTaskSelect({
+  ariaLabel,
+  children,
+  disabled = false,
+  onChange,
+  value,
+}: {
+  ariaLabel: string;
+  children: React.ReactNode;
+  disabled?: boolean;
+  onChange: React.ChangeEventHandler<HTMLSelectElement>;
+  value: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <Select
+        aria-label={ariaLabel}
+        className="h-9 rounded-[0.9rem] border-border/35 bg-background/88 shadow-none"
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+      >
+        {children}
+      </Select>
+    </div>
   );
 }

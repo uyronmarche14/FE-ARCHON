@@ -13,6 +13,7 @@ function createTaskStatus(overrides: Partial<TaskStatus> = {}): TaskStatus {
     name: overrides.name ?? "Todo",
     position: overrides.position ?? 1,
     isClosed: overrides.isClosed ?? false,
+    color: overrides.color ?? (overrides.isClosed ? "GREEN" : "SLATE"),
   };
 }
 
@@ -31,11 +32,17 @@ function createTask(overrides: Partial<TaskCard> = {}): TaskCard {
     projectId: overrides.projectId ?? "project-1",
     title: overrides.title ?? "Task",
     description: overrides.description ?? null,
+    acceptanceCriteria: overrides.acceptanceCriteria ?? null,
+    notes: overrides.notes ?? null,
+    parentTaskId: overrides.parentTaskId ?? null,
     statusId: overrides.statusId ?? status.id,
     status,
     position: overrides.position ?? 1,
     assigneeId: overrides.assigneeId ?? null,
     dueDate: overrides.dueDate ?? null,
+    links: overrides.links ?? [],
+    checklistItems: overrides.checklistItems ?? [],
+    subtasks: overrides.subtasks ?? [],
     createdAt: overrides.createdAt ?? "2026-04-01T09:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-04-01T09:00:00.000Z",
   };
@@ -157,6 +164,7 @@ describe("task-board helpers", () => {
               name: "Todo",
               position: 1,
               isClosed: false,
+              color: "SLATE",
               taskCount: 2,
             },
             {
@@ -164,6 +172,7 @@ describe("task-board helpers", () => {
               name: "In Progress",
               position: 2,
               isClosed: false,
+              color: "BLUE",
               taskCount: 1,
             },
             {
@@ -171,6 +180,7 @@ describe("task-board helpers", () => {
               name: "Done",
               position: 3,
               isClosed: true,
+              color: "GREEN",
               taskCount: 0,
             },
           ],
@@ -185,6 +195,7 @@ describe("task-board helpers", () => {
               name: "Todo",
               position: 1,
               isClosed: false,
+              color: "SLATE",
               taskCount: 1,
             },
           ],
@@ -206,6 +217,7 @@ describe("task-board helpers", () => {
         name: "Todo",
         position: 1,
         isClosed: false,
+        color: "SLATE",
         taskCount: 1,
       },
       {
@@ -213,6 +225,7 @@ describe("task-board helpers", () => {
         name: "In Progress",
         position: 2,
         isClosed: false,
+        color: "BLUE",
         taskCount: 1,
       },
       {
@@ -220,6 +233,7 @@ describe("task-board helpers", () => {
         name: "Done",
         position: 3,
         isClosed: true,
+        color: "GREEN",
         taskCount: 1,
       },
     ]);
@@ -246,6 +260,7 @@ describe("task-board helpers", () => {
       name: "Review",
       position: 2,
       isClosed: false,
+      color: "AMBER",
       taskCount: 0,
     });
 

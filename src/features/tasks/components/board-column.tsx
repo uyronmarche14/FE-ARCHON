@@ -3,7 +3,10 @@ import type { ComponentProps, ReactNode } from "react";
 import { MoreHorizontal, Plus } from "lucide-react";
 import type { TaskStatus } from "@/contracts/tasks";
 import { Button } from "@/components/ui/button";
-import { getTaskStatusTone } from "@/features/tasks/lib/task-board";
+import {
+  getTaskStatusDotClassName,
+  getTaskStatusSurfaceClassName,
+} from "@/features/tasks/lib/task-board";
 import { cn } from "@/lib/utils";
 
 type BoardColumnProps = {
@@ -44,12 +47,13 @@ export const BoardColumn = React.forwardRef<HTMLElement, BoardColumnProps>(
         ref={ref}
         data-testid={dataTestId}
         className={cn(
-          "min-w-0 overflow-hidden rounded-[1.2rem] border border-border/70 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+          "min-w-0 overflow-hidden rounded-[1.2rem] border shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
           presentation === "desktop"
             ? density === "compact"
               ? "w-[18.5rem] shrink-0 rounded-[1rem]"
               : "w-[20.5rem] shrink-0"
             : "w-full",
+          getTaskStatusSurfaceClassName(status),
           className,
         )}
       >
@@ -91,10 +95,10 @@ export function BoardColumnHeader({
 }: BoardColumnHeaderProps) {
   return (
     <header
-      className={cn(
-        "sticky top-0 z-10 border-b border-border/60 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90",
-        density === "compact" ? "px-3 py-2.5" : "px-3.5 py-3",
-      )}
+        className={cn(
+          "sticky top-0 z-10 border-b border-black/5 bg-white/75 backdrop-blur supports-[backdrop-filter]:bg-white/65",
+          density === "compact" ? "px-3 py-2.5" : "px-3.5 py-3",
+        )}
     >
       <div
         className={cn(
@@ -104,7 +108,12 @@ export function BoardColumnHeader({
       >
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
-            <span className={cn("size-2.5 rounded-full", getLaneDotClassName(status))} />
+            <span
+              className={cn(
+                "size-2.5 rounded-full shadow-[0_0_0_3px_rgba(255,255,255,0.72)]",
+                getLaneDotClassName(status),
+              )}
+            />
             <h3
               className={cn(
                 "font-semibold tracking-tight text-foreground",
@@ -185,15 +194,5 @@ export function BoardLaneEmptyState({ lane }: { lane: string }) {
 }
 
 export function getLaneDotClassName(status: TaskStatus) {
-  const tone = getTaskStatusTone(status);
-
-  if (tone === "progress") {
-    return "bg-in-progress";
-  }
-
-  if (tone === "done") {
-    return "bg-done";
-  }
-
-  return "bg-todo";
+  return getTaskStatusDotClassName(status);
 }

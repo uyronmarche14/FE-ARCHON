@@ -5,6 +5,7 @@ import type {
   ProjectSummary,
 } from "@/contracts/projects";
 import type {
+  ProjectStatusColor,
   ProjectTaskStatus,
   TaskCard,
   TaskStatus,
@@ -22,9 +23,18 @@ export type BoardMetric = {
   value: string;
 };
 
+export type BoardFilterChip = {
+  label: string;
+  statusId: "ALL" | string;
+  value: number;
+  active: boolean;
+  color: ProjectStatusColor | null;
+};
+
 export type TaskMemberLookup = Record<string, string>;
 
 export type BoardTaskAssigneeFilter = "ALL" | "UNASSIGNED" | string;
+export type BoardTaskStatusFilter = "ALL" | string;
 export type BoardTaskDueDateFilter =
   | "ALL"
   | "NO_DUE_DATE"
@@ -54,6 +64,7 @@ export function filterAndSortTaskStatuses(
   statuses: ProjectTaskStatus[],
   options: {
     searchQuery: string;
+    statusFilter: BoardTaskStatusFilter;
     assigneeFilter: BoardTaskAssigneeFilter;
     dueDateFilter: BoardTaskDueDateFilter;
     sortOrder: BoardTaskSort;
@@ -61,40 +72,55 @@ export function filterAndSortTaskStatuses(
 ): ProjectTaskStatus[] {
   const normalizedSearchQuery = options.searchQuery.trim().toLowerCase();
 
-  return statuses.map((status) => ({
-    ...status,
-    tasks: sortBoardTasks(
-      status.tasks.filter((task) => {
-        if (
-          normalizedSearchQuery.length > 0 &&
-          !`${task.title} ${task.description ?? ""}`
-            .toLowerCase()
-            .includes(normalizedSearchQuery)
-        ) {
-          return false;
-        }
+  return statuses
+    .filter(
+      (status) =>
+        options.statusFilter === "ALL" || status.id === options.statusFilter,
+    )
+    .map((status) => ({
+      ...status,
+      tasks: sortBoardTasks(
+        status.tasks.filter((task) => {
+          const searchableText = [
+            task.title,
+            task.description ?? "",
+            task.acceptanceCriteria ?? "",
+            task.notes ?? "",
+          ]
+            .join(" ")
+            .toLowerCase();
 
-        if (options.assigneeFilter === "UNASSIGNED" && task.assigneeId !== null) {
-          return false;
-        }
+          if (
+            normalizedSearchQuery.length > 0 &&
+            !searchableText.includes(normalizedSearchQuery)
+          ) {
+            return false;
+          }
 
-        if (
-          options.assigneeFilter !== "ALL" &&
-          options.assigneeFilter !== "UNASSIGNED" &&
-          task.assigneeId !== options.assigneeFilter
-        ) {
-          return false;
-        }
+          if (
+            options.assigneeFilter === "UNASSIGNED" &&
+            task.assigneeId !== null
+          ) {
+            return false;
+          }
 
-        if (!matchesDueDateFilter(task.dueDate, options.dueDateFilter)) {
-          return false;
-        }
+          if (
+            options.assigneeFilter !== "ALL" &&
+            options.assigneeFilter !== "UNASSIGNED" &&
+            task.assigneeId !== options.assigneeFilter
+          ) {
+            return false;
+          }
 
-        return true;
-      }),
-      options.sortOrder,
-    ),
-  }));
+          if (!matchesDueDateFilter(task.dueDate, options.dueDateFilter)) {
+            return false;
+          }
+
+          return true;
+        }),
+        options.sortOrder,
+      ),
+    }));
 }
 
 export function createAssigneeFilterOptions(
@@ -136,13 +162,24 @@ export function createBoardMetrics(statuses: ProjectTaskStatus[]): BoardMetric[]
   ];
 }
 
-export function createBoardFilters(statuses: ProjectTaskStatus[]) {
+export function createBoardFilters(
+  statuses: ProjectTaskStatus[],
+  activeStatusFilter: BoardTaskStatusFilter,
+): BoardFilterChip[] {
   return [
-    { label: "All work", value: getTotalTaskCount(statuses), active: true },
+    {
+      label: "All work",
+      statusId: "ALL",
+      value: getTotalTaskCount(statuses),
+      active: activeStatusFilter === "ALL",
+      color: null,
+    },
     ...statuses.map((status) => ({
       label: status.name,
+      statusId: status.id,
       value: status.tasks.length,
-      active: false,
+      active: activeStatusFilter === status.id,
+      color: status.color,
     })),
   ];
 }
@@ -166,7 +203,9 @@ export function updateTaskInStatuses(
   task: TaskCard,
 ): ProjectTaskStatus[] {
   return statuses.map((status) => {
-    const remainingTasks = status.tasks.filter((laneTask) => laneTask.id !== task.id);
+    const remainingTasks = status.tasks.filter(
+      (laneTask) => laneTask.id !== task.id,
+    );
 
     if (status.id === task.statusId) {
       return {
@@ -187,7 +226,9 @@ export function moveTaskToStatus(
   taskId: string,
   nextStatusId: string,
 ) {
-  const previousTask = flattenTaskStatuses(statuses).find((task) => task.id === taskId);
+  const previousTask = flattenTaskStatuses(statuses).find(
+    (task) => task.id === taskId,
+  );
   const nextStatus = statuses.find((status) => status.id === nextStatusId) ?? null;
 
   if (!previousTask || !nextStatus || previousTask.statusId === nextStatusId) {
@@ -207,6 +248,7 @@ export function moveTaskToStatus(
       name: nextStatus.name,
       position: nextStatus.position,
       isClosed: nextStatus.isClosed,
+      color: nextStatus.color,
     },
     position: null,
   };
@@ -299,7 +341,9 @@ export function applyCreatedStatusToProjectSummary(
 ) {
   return {
     ...project,
-    statuses: [...project.statuses, status].sort((left, right) => left.position - right.position),
+    statuses: [...project.statuses, status].sort(
+      (left, right) => left.position - right.position,
+    ),
   };
 }
 
@@ -322,7 +366,7 @@ export function getBoardProjectName(
 export function getBoardProjectDescription(projectSummary?: ProjectSummary | null) {
   return (
     projectSummary?.description ??
-    "Scan open work quickly, keep active tasks in view, and open a lightweight preview without losing your place in the board."
+    "Scan open work quickly, keep active tasks in view, and open a richer task workspace without losing your place on the board."
   );
 }
 
@@ -369,7 +413,10 @@ export function getTaskUpdatedLabel(updatedAt: string) {
   return `Updated ${formatBoardDate(updatedAt)}`;
 }
 
-export function getTaskPositionLabel(position: number | null, status: TaskStatus | string) {
+export function getTaskPositionLabel(
+  position: number | null,
+  status: TaskStatus | string,
+) {
   if (position === null) {
     return `No fixed order in ${formatTaskStatusLabel(status)}.`;
   }
@@ -399,22 +446,63 @@ export function formatTaskStatusLabel(status: TaskStatus | string) {
 }
 
 export function getTaskStatusTone(status: TaskStatus) {
+  if (status.color === "GREEN") {
+    return "done" as const;
+  }
+
+  if (status.color === "BLUE" || status.color === "PURPLE") {
+    return "progress" as const;
+  }
+
   if (status.isClosed) {
     return "done" as const;
   }
 
-  const normalizedName = status.name.trim().toLowerCase();
+  return "todo" as const;
+}
 
-  if (
-    normalizedName.includes("progress") ||
-    normalizedName.includes("doing") ||
-    normalizedName.includes("active") ||
-    normalizedName.includes("review")
-  ) {
-    return "progress" as const;
+export function getTaskStatusDotClassName(status: TaskStatus) {
+  switch (status.color) {
+    case "BLUE":
+      return "bg-[color:var(--status-blue)]";
+    case "AMBER":
+      return "bg-[color:var(--status-amber)]";
+    case "GREEN":
+      return "bg-[color:var(--status-green)]";
+    case "RED":
+      return "bg-[color:var(--status-red)]";
+    case "PURPLE":
+      return "bg-[color:var(--status-purple)]";
+    case "SLATE":
+    default:
+      return "bg-[color:var(--status-slate)]";
+  }
+}
+
+export function getTaskStatusBadgeClassName(status: TaskStatus) {
+  return getTaskStatusThemeClassName(status, "soft");
+}
+
+export function getTaskStatusCardClassName(status: TaskStatus) {
+  return getTaskStatusThemeClassName(status, "card");
+}
+
+export function getTaskStatusSurfaceClassName(status: TaskStatus) {
+  return getTaskStatusThemeClassName(status, "surface");
+}
+
+export function getTaskStatusChipClassName(
+  status: TaskStatus,
+  active: boolean,
+) {
+  const base =
+    "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+
+  if (!active) {
+    return `${base} border-transparent bg-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground`;
   }
 
-  return "todo" as const;
+  return `${base} ${getTaskStatusThemeClassName(status, "soft")} shadow-[0_1px_2px_rgba(15,23,42,0.04)]`;
 }
 
 function getBoardStatusDescription(status: TaskStatus, index: number) {
@@ -542,4 +630,21 @@ function humanizeProjectSlug(projectId: string) {
   return projectId
     .replace(/[-_]+/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function getTaskStatusThemeClassName(
+  status: TaskStatus,
+  tone: "soft" | "card" | "surface",
+) {
+  const colorKey = status.color.toLowerCase();
+
+  if (tone === "card") {
+    return `border-[color:color-mix(in_srgb,var(--status-${colorKey})_18%,var(--border))] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--status-${colorKey})_8%,white),white_52%,color-mix(in_srgb,var(--status-${colorKey})_6%,var(--surface-subtle)))]`;
+  }
+
+  if (tone === "surface") {
+    return `border-[color:color-mix(in_srgb,var(--status-${colorKey})_18%,var(--border))] bg-[color:color-mix(in_srgb,var(--status-${colorKey})_8%,white)]`;
+  }
+
+  return `border-[color:color-mix(in_srgb,var(--status-${colorKey})_24%,transparent)] bg-[color:color-mix(in_srgb,var(--status-${colorKey})_12%,white)] text-[color:var(--status-${colorKey})]`;
 }

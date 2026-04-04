@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { Layers3, LoaderCircle, Plus } from "lucide-react";
-import type { ProjectStatusResponse } from "@/contracts/projects";
+import type {
+  ProjectStatusColor,
+  ProjectStatusResponse,
+} from "@/contracts/projects";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,12 +37,14 @@ export function CreateProjectStatusDialog({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState<"OPEN" | "CLOSED">("OPEN");
+  const [color, setColor] = useState<ProjectStatusColor>("BLUE");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   function resetForm() {
     setName("");
     setType("OPEN");
+    setColor("BLUE");
     setFieldError(null);
     setFormError(null);
   }
@@ -61,6 +66,7 @@ export function CreateProjectStatusDialog({
       const createdStatus = await createProjectStatusMutation.mutateAsync({
         name: normalizedName,
         isClosed: type === "CLOSED",
+        color,
       });
 
       onCreated(createdStatus);
@@ -169,11 +175,43 @@ export function CreateProjectStatusDialog({
               value={type}
               disabled={createProjectStatusMutation.isPending}
               onChange={(event) => {
-                setType(event.target.value as "OPEN" | "CLOSED");
+                const nextType = event.target.value as "OPEN" | "CLOSED";
+                setType(nextType);
+                setColor((currentColor: ProjectStatusColor) =>
+                  currentColor === "BLUE" || currentColor === "GREEN"
+                    ? nextType === "CLOSED"
+                      ? "GREEN"
+                      : "BLUE"
+                    : currentColor,
+                );
               }}
             >
               <option value="OPEN">Open stage</option>
               <option value="CLOSED">Completed stage</option>
+            </Select>
+          </section>
+
+          <section className="grid gap-4 rounded-[1.1rem] border border-border/70 bg-card px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <div className="space-y-1">
+              <Label htmlFor="status-color">Status color</Label>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Use a distinct accent so the lane, cards, and pills stay readable across the board.
+              </p>
+            </div>
+            <Select
+              id="status-color"
+              value={color}
+              disabled={createProjectStatusMutation.isPending}
+              onChange={(event) =>
+                setColor(event.target.value as ProjectStatusColor)
+              }
+            >
+              <option value="SLATE">Slate</option>
+              <option value="BLUE">Blue</option>
+              <option value="AMBER">Amber</option>
+              <option value="GREEN">Green</option>
+              <option value="RED">Red</option>
+              <option value="PURPLE">Purple</option>
             </Select>
           </section>
 

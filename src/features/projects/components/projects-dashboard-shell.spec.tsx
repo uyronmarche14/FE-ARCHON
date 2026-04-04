@@ -373,6 +373,7 @@ function createProjectSummary(
         name: "Todo",
         position: 1,
         isClosed: false,
+        color: "SLATE",
         taskCount: options.todo,
       },
       {
@@ -380,6 +381,7 @@ function createProjectSummary(
         name: "In Progress",
         position: 2,
         isClosed: false,
+        color: "BLUE",
         taskCount: options.inProgress,
       },
       {
@@ -387,6 +389,7 @@ function createProjectSummary(
         name: "Done",
         position: 3,
         isClosed: true,
+        color: "GREEN",
         taskCount: options.done,
       },
     ],

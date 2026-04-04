@@ -32,6 +32,8 @@ const sheetVariants = cva(
   {
     variants: {
       side: {
+        center:
+          "left-1/2 top-1/2 h-auto max-h-[calc(100%-1rem)] w-[min(calc(100%-1rem),56rem)] -translate-x-1/2 -translate-y-1/2 rounded-[1.35rem] sm:max-h-[calc(100%-2rem)] sm:w-[min(calc(100%-2rem),56rem)]",
         top: "inset-x-4 top-4 rounded-[1.35rem]",
         bottom: "inset-x-4 bottom-4 rounded-[1.35rem]",
         left: "inset-y-4 left-4 h-[calc(100%-2rem)] w-[min(92vw,26rem)] rounded-[1.35rem]",

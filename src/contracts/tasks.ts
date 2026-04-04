@@ -1,8 +1,43 @@
+export type ProjectStatusColor =
+  | "SLATE"
+  | "BLUE"
+  | "AMBER"
+  | "GREEN"
+  | "RED"
+  | "PURPLE";
+
 export type TaskStatus = {
   id: string;
   name: string;
   position: number;
   isClosed: boolean;
+  color: ProjectStatusColor;
+};
+
+export type TaskLink = {
+  id: string;
+  label: string;
+  url: string;
+  position: number;
+};
+
+export type TaskChecklistItem = {
+  id: string;
+  label: string;
+  isCompleted: boolean;
+  position: number;
+};
+
+export type TaskSubtask = {
+  id: string;
+  title: string;
+  description: string | null;
+  statusId: string;
+  status: TaskStatus;
+  assigneeId: string | null;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type TaskCard = {
@@ -10,11 +45,17 @@ export type TaskCard = {
   projectId: string;
   title: string;
   description: string | null;
+  acceptanceCriteria: string | null;
+  notes: string | null;
+  parentTaskId: string | null;
   statusId: string;
   status: TaskStatus;
   position: number | null;
   assigneeId: string | null;
   dueDate: string | null;
+  links: TaskLink[];
+  checklistItems: TaskChecklistItem[];
+  subtasks: TaskSubtask[];
   createdAt: string;
   updatedAt: string;
 };
@@ -31,15 +72,36 @@ export type CreateTaskRequest = {
   title: string;
   statusId?: string;
   description?: string;
+  acceptanceCriteria?: string;
+  notes?: string;
+  parentTaskId?: string;
   assigneeId?: string;
   dueDate?: string;
+  links?: Array<{
+    label: string;
+    url: string;
+  }>;
+  checklistItems?: Array<{
+    label: string;
+    isCompleted?: boolean;
+  }>;
 };
 
 export type UpdateTaskRequest = {
   title?: string;
   description?: string | null;
+  acceptanceCriteria?: string | null;
+  notes?: string | null;
   assigneeId?: string | null;
   dueDate?: string | null;
+  links?: Array<{
+    label: string;
+    url: string;
+  }>;
+  checklistItems?: Array<{
+    label: string;
+    isCompleted?: boolean;
+  }>;
 };
 
 export type UpdateTaskStatusRequest = {
@@ -48,6 +110,10 @@ export type UpdateTaskStatusRequest = {
 };
 
 export type DeleteTaskResponse = {
+  message: string;
+};
+
+export type TaskActionResponse = {
   message: string;
 };
 
@@ -61,7 +127,12 @@ export type TaskLogAssigneeValue = {
   name: string;
 };
 
-export type TaskLogValue = string | number | boolean | TaskLogAssigneeValue | null;
+export type TaskLogValue =
+  | string
+  | number
+  | boolean
+  | TaskLogAssigneeValue
+  | null;
 
 export type TaskLogEntry = {
   id: string;
@@ -82,4 +153,53 @@ export type TaskLogsResponse = {
   page: number;
   pageSize: number;
   hasMore: boolean;
+};
+
+export type TaskComment = {
+  id: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  author: {
+    id: string;
+    name: string;
+  };
+};
+
+export type TaskCommentsResponse = {
+  items: TaskComment[];
+};
+
+export type CreateTaskCommentRequest = {
+  body: string;
+};
+
+export type UpdateTaskCommentRequest = {
+  body: string;
+};
+
+export type TaskAttachment = {
+  id: string;
+  label: string | null;
+  fileName: string;
+  url: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  createdAt: string;
+  createdBy: {
+    id: string;
+    name: string;
+  };
+};
+
+export type TaskAttachmentsResponse = {
+  items: TaskAttachment[];
+};
+
+export type CreateTaskAttachmentRequest = {
+  label: string;
+  fileName: string;
+  url: string;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
 };

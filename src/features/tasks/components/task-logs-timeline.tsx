@@ -2,7 +2,6 @@
 
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import type { TaskLogEntry } from "@/contracts/tasks";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TaskActivityEntry } from "@/features/tasks/components/task-activity-entry";
@@ -29,23 +28,23 @@ export function TaskLogsTimeline({
   return (
     <section className="grid gap-3">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+        <div className="space-y-1">
+          <p className="text-[0.68rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
             Activity log
           </p>
-          <p className="mt-1 text-sm leading-5 text-muted-foreground">
-            Review the latest task changes without leaving the board.
+          <p className="text-sm leading-5 text-muted-foreground">
+            Review the latest task changes without leaving the workspace.
           </p>
         </div>
-        <Badge variant="muted" size="xs" className="px-2">
-          {entries.length} entries
-        </Badge>
+        {entries.length > 0 ? (
+          <p className="text-xs text-muted-foreground">{entries.length} entries</p>
+        ) : null}
       </div>
 
       {isLoading ? <TaskLogsTimelineLoadingState /> : null}
 
       {!isLoading && errorMessage ? (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-4">
+        <div className="rounded-[1rem] border border-destructive/20 bg-destructive/5 px-3.5 py-3.5">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
             <div className="min-w-0 flex-1 space-y-2">
@@ -75,7 +74,7 @@ export function TaskLogsTimeline({
       ) : null}
 
       {!isLoading && !errorMessage && entries.length === 0 ? (
-        <div className="rounded-[1rem] border border-dashed border-border/70 bg-surface-subtle/35 px-4 py-5 text-center">
+        <div className="rounded-[1rem] border border-dashed border-border/55 bg-surface-subtle/30 px-4 py-4 text-center">
           <p className="text-sm font-semibold text-foreground">No activity yet.</p>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             New history entries will appear here after task creation, edits, and lane
@@ -85,10 +84,10 @@ export function TaskLogsTimeline({
       ) : null}
 
       {!isLoading && !errorMessage && entries.length > 0 ? (
-        <ol className="grid gap-3">
+        <ol className="grid gap-2.5">
           {entries.map((entry) => (
             <li key={entry.id}>
-              <TaskActivityEntry entry={entry} />
+              <TaskActivityEntry density="compact" entry={entry} />
             </li>
           ))}
         </ol>
@@ -120,8 +119,8 @@ export function TaskLogsTimeline({
 function TaskLogsTimelineLoadingState() {
   return (
     <div aria-label="Loading task activity log" className="grid gap-3">
-      <Skeleton className="h-28 rounded-[1rem]" />
-      <Skeleton className="h-28 rounded-[1rem]" />
+      <Skeleton className="h-24 rounded-[1rem]" />
+      <Skeleton className="h-24 rounded-[1rem]" />
     </div>
   );
 }

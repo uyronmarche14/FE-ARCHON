@@ -7,10 +7,11 @@ import {
   formatTaskStatusLabel,
   getTaskAssigneeInitials,
   getTaskAssigneeLabel,
+  getTaskStatusBadgeClassName,
+  getTaskStatusCardClassName,
   getTaskDueLabel,
   getTaskPositionSummaryLabel,
   type TaskMemberLookup,
-  getTaskStatusTone,
   getTaskUpdatedLabel,
 } from "@/features/tasks/lib/task-board";
 
@@ -37,11 +38,12 @@ export function TaskCard({
   return (
     <article
       className={cn(
-        "grid h-full cursor-grab grid-rows-[auto_1fr_auto] border border-border/70 bg-linear-to-br from-background via-background to-surface-subtle/45 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[transform,border-color,box-shadow,background-color,opacity] duration-150 hover:-translate-y-0.5 hover:border-primary/20 hover:bg-card hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)] active:cursor-grabbing",
+        "grid h-full cursor-grab grid-rows-[auto_1fr_auto] border shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[transform,border-color,box-shadow,background-color,opacity] duration-150 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)] active:cursor-grabbing",
         density === "compact"
           ? "min-h-[9.6rem] gap-2.5 rounded-[0.9rem] px-2.5 py-2.5"
           : "min-h-[11.25rem] gap-3 rounded-[0.95rem] px-3 py-3",
-        isDragging && "border-primary/30 bg-card opacity-75 shadow-[0_20px_40px_rgba(15,23,42,0.12)]",
+        getTaskStatusCardClassName(task.status),
+        isDragging && "opacity-75 shadow-[0_20px_40px_rgba(15,23,42,0.12)]",
       )}
     >
       <header
@@ -53,7 +55,11 @@ export function TaskCard({
         )}
       >
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <Badge variant={getLaneBadgeVariant(task.status)} size="xs">
+          <Badge
+            variant="outline"
+            size="xs"
+            className={getTaskStatusBadgeClassName(task.status)}
+          >
             {formatTaskStatusLabel(task.status)}
           </Badge>
           <Badge
@@ -112,7 +118,7 @@ export function TaskCard({
               : "text-[12px] leading-5",
           )}
         >
-          {task.description ?? "No description available yet."}
+          {task.description ?? "No summary available yet."}
         </p>
       </button>
 
@@ -151,18 +157,4 @@ export function TaskCard({
       </footer>
     </article>
   );
-}
-
-function getLaneBadgeVariant(status: TaskCardData["status"]) {
-  const tone = getTaskStatusTone(status);
-
-  if (tone === "progress") {
-    return "progress" as const;
-  }
-
-  if (tone === "done") {
-    return "done" as const;
-  }
-
-  return "todo" as const;
 }

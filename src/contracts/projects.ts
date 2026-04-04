@@ -1,8 +1,10 @@
 import type {
+  ProjectStatusColor,
   ProjectTaskStatus,
   TaskLogEventType,
   TaskLogValue,
 } from "@/contracts/tasks";
+export type { ProjectStatusColor } from "@/contracts/tasks";
 
 export type ProjectRole = "OWNER" | "MEMBER";
 
@@ -11,6 +13,7 @@ export type ProjectStatusSummary = {
   name: string;
   position: number;
   isClosed: boolean;
+  color: ProjectStatusColor;
   taskCount: number;
 };
 
@@ -48,9 +51,30 @@ export type CreateProjectRequest = {
 export type CreateProjectStatusRequest = {
   name: string;
   isClosed?: boolean;
+  color?: ProjectStatusColor;
+};
+
+export type UpdateProjectStatusRequest = {
+  name?: string;
+  isClosed?: boolean;
+  color?: ProjectStatusColor;
+};
+
+export type ReorderProjectStatusesRequest = {
+  statuses: Array<{
+    id: string;
+  }>;
+};
+
+export type DeleteProjectStatusRequest = {
+  moveToStatusId: string;
 };
 
 export type ProjectStatusResponse = ProjectStatusSummary;
+
+export type ProjectStatusListResponse = {
+  items: ProjectStatusSummary[];
+};
 
 export type CreateProjectInviteRequest = {
   email: string;

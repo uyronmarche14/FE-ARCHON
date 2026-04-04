@@ -31,6 +31,7 @@ export function PublicHeroVisual() {
     () =>
       filterAndSortTaskStatuses(publicHeroStatuses, {
         searchQuery,
+        statusFilter: "ALL",
         assigneeFilter: "ALL",
         dueDateFilter: "ALL",
         sortOrder: "DEFAULT",

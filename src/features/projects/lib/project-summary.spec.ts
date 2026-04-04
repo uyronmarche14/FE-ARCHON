@@ -14,6 +14,7 @@ function createProjectStatusSummary(
     name: overrides.name ?? "Todo",
     position: overrides.position ?? 1,
     isClosed: overrides.isClosed ?? false,
+    color: overrides.color ?? (overrides.isClosed ? "GREEN" : "SLATE"),
     taskCount: overrides.taskCount ?? 0,
   };
 }

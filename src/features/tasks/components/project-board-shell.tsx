@@ -14,6 +14,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   CalendarClock,
+  ChevronDown,
   CircleCheckBig,
   LayoutGrid,
   Plus,
@@ -36,12 +37,19 @@ import { useAuthSession } from "@/features/auth/providers/auth-session-provider"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateProjectStatusDialog } from "@/features/projects/components/create-project-status-dialog";
 import { InviteMemberDialog } from "@/features/projects/components/invite-member-dialog";
+import { ManageProjectStatusesDialog } from "@/features/projects/components/manage-project-statuses-dialog";
 import { getLaneDotClassName } from "@/features/tasks/components/board-column";
 import { BoardContainer } from "@/features/tasks/components/board-container";
 import { KanbanBoardLane } from "@/features/tasks/components/kanban-board-lane";
@@ -67,6 +75,7 @@ import {
   type BoardTaskAssigneeFilter,
   type BoardTaskDueDateFilter,
   type BoardTaskSort,
+  type BoardTaskStatusFilter,
   createAssigneeFilterOptions,
   createBoardFilters,
   createBoardLanes,
@@ -77,6 +86,7 @@ import {
   flattenTaskStatuses,
   getBoardProjectDescription,
   getBoardProjectName,
+  getTaskStatusChipClassName,
   insertStatusIntoTaskStatuses,
   insertTaskIntoStatuses,
   moveTaskToStatus,
@@ -119,6 +129,8 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
   const [drawerState, setDrawerState] = useState<TaskDrawerState | null>(null);
   const [activeDragTaskId, setActiveDragTaskId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] =
+    useState<BoardTaskStatusFilter>("ALL");
   const [assigneeFilter, setAssigneeFilter] =
     useState<BoardTaskAssigneeFilter>("ALL");
   const [dueDateFilter, setDueDateFilter] =
@@ -142,11 +154,12 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     () =>
       filterAndSortTaskStatuses(statuses, {
         searchQuery,
+        statusFilter,
         assigneeFilter,
         dueDateFilter,
         sortOrder,
       }),
-    [assigneeFilter, dueDateFilter, searchQuery, sortOrder, statuses],
+    [assigneeFilter, dueDateFilter, searchQuery, sortOrder, statusFilter, statuses],
   );
   const visibleTasks = useMemo(
     () => flattenTaskStatuses(visibleStatuses),
@@ -155,13 +168,41 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
   const lanes = useMemo(() => createBoardLanes(visibleStatuses), [visibleStatuses]);
   const metrics = useMemo(() => createBoardMetrics(visibleStatuses), [visibleStatuses]);
   const boardFilters = useMemo(
-    () => createBoardFilters(visibleStatuses),
-    [visibleStatuses],
+    () => createBoardFilters(statuses, statusFilter),
+    [statusFilter, statuses],
   );
   const assigneeOptions = useMemo(
     () => createAssigneeFilterOptions(statuses, membersQuery.data ?? []),
     [membersQuery.data, statuses],
   );
+  const dueDateOptions = useMemo(
+    () => [
+      { label: "All due dates", value: "ALL" as const },
+      { label: "No due date", value: "NO_DUE_DATE" as const },
+      { label: "Overdue", value: "OVERDUE" as const },
+      { label: "Next 7 days", value: "NEXT_7_DAYS" as const },
+      { label: "Future", value: "FUTURE" as const },
+    ],
+    [],
+  );
+  const sortOptions = useMemo(
+    () => [
+      { label: "Board order", value: "DEFAULT" as const },
+      { label: "Due date", value: "DUE_DATE" as const },
+      { label: "Newest updated", value: "NEWEST_UPDATED" as const },
+      { label: "Oldest created", value: "OLDEST_CREATED" as const },
+    ],
+    [],
+  );
+  const selectedAssigneeLabel =
+    assigneeOptions.find((option) => option.value === assigneeFilter)?.label ??
+    "All assignees";
+  const selectedDueDateLabel =
+    dueDateOptions.find((option) => option.value === dueDateFilter)?.label ??
+    "All due dates";
+  const selectedSortLabel =
+    sortOptions.find((option) => option.value === sortOrder)?.label ??
+    "Board order";
   const memberLookup = useMemo(
     () => createTaskMemberLookup(membersQuery.data ?? []),
     [membersQuery.data],
@@ -578,10 +619,23 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
             <div className="flex flex-wrap gap-2">
               {canInviteMembers ? <InviteMemberDialog projectId={projectId} /> : null}
               {canManageStatuses ? (
-                <CreateProjectStatusDialog
-                  projectId={projectId}
-                  onCreated={handleProjectStatusCreated}
-                />
+                <>
+                  <CreateProjectStatusDialog
+                    projectId={projectId}
+                    onCreated={handleProjectStatusCreated}
+                  />
+                  <ManageProjectStatusesDialog
+                    projectId={projectId}
+                    statuses={statuses.map((status) => ({
+                      id: status.id,
+                      name: status.name,
+                      position: status.position,
+                      isClosed: status.isClosed,
+                      color: status.color,
+                      taskCount: status.tasks.length,
+                    }))}
+                  />
+                </>
               ) : null}
               <Button
                 type="button"
@@ -627,118 +681,119 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
       <Tabs
         value={activeSurfaceTab}
         onValueChange={(value) => setActiveSurfaceTab(value as "board" | "activity")}
-        className="grid gap-3"
+        className="grid gap-2.5"
       >
         <div className="flex items-center justify-between gap-3">
-          <TabsList aria-label="Project surface view">
+          <TabsList
+            aria-label="Project surface view"
+            className="min-h-9 border-border/60 bg-background/85 shadow-none"
+          >
             <TabsTrigger value="board">Board</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
-          <Badge variant="muted" size="xs">
+          <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             {activeSurfaceTab === "board"
               ? `${visibleTasks.length} visible`
-              : "Project-wide history"}
-          </Badge>
+              : "Project activity"}
+          </p>
         </div>
 
-        <TabsContent value="board" className="grid gap-3">
-          <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
-            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_11rem_11rem]">
-              <div className="rounded-[0.95rem] border border-border/70 bg-background/90 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <TabsContent value="board" className="grid gap-2.5">
+          <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_12rem] xl:items-center">
+            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_10.5rem_10.5rem]">
+              <div className="rounded-full border border-border/65 bg-background/85 px-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                 <div className="relative">
                   <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     aria-label="Search board tasks"
-                    className="border-0 bg-transparent pl-9 shadow-none"
-                    placeholder="Search title or description"
+                    className="h-10 border-0 bg-transparent pl-9 shadow-none"
+                    placeholder="Search title, summary, acceptance criteria, or notes"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                   />
                 </div>
               </div>
 
-              <div className="rounded-[0.95rem] border border-border/70 bg-background/90 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-                <Select
+              <div className="rounded-full border border-border/65 bg-background/85 px-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <BoardControlSelect
                   aria-label="Filter tasks by assignee"
-                  value={assigneeFilter}
-                  className="border-0 bg-transparent shadow-none"
-                  onChange={(event) =>
-                    setAssigneeFilter(event.target.value as BoardTaskAssigneeFilter)
+                  value={selectedAssigneeLabel}
+                  menuValue={assigneeFilter}
+                  onValueChange={(value) =>
+                    setAssigneeFilter(value as BoardTaskAssigneeFilter)
                   }
-                >
-                  {assigneeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {"count" in option
+                  options={assigneeOptions.map((option) => ({
+                    label:
+                      "count" in option
                         ? `${option.label} (${option.count})`
-                        : option.label}
-                    </option>
-                  ))}
-                </Select>
+                        : option.label,
+                    value: option.value,
+                  }))}
+                />
               </div>
 
-              <div className="rounded-[0.95rem] border border-border/70 bg-background/90 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-                <Select
+              <div className="rounded-full border border-border/65 bg-background/85 px-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <BoardControlSelect
                   aria-label="Filter tasks by due date"
-                  value={dueDateFilter}
-                  className="border-0 bg-transparent shadow-none"
-                  onChange={(event) =>
-                    setDueDateFilter(event.target.value as BoardTaskDueDateFilter)
+                  value={selectedDueDateLabel}
+                  menuValue={dueDateFilter}
+                  onValueChange={(value) =>
+                    setDueDateFilter(value as BoardTaskDueDateFilter)
                   }
-                >
-                  <option value="ALL">All due dates</option>
-                  <option value="NO_DUE_DATE">No due date</option>
-                  <option value="OVERDUE">Overdue</option>
-                  <option value="NEXT_7_DAYS">Next 7 days</option>
-                  <option value="FUTURE">Future</option>
-                </Select>
+                  options={dueDateOptions}
+                />
               </div>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-              <Badge
-                variant="muted"
-                size="xs"
-                className="justify-center rounded-[0.95rem] px-3 py-2"
-              >
-                Grouped by status
-              </Badge>
-              <div className="rounded-[0.95rem] border border-border/70 bg-background/90 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-                <Select
+            <div className="flex items-center gap-2 xl:justify-end">
+              <div className="rounded-full border border-border/65 bg-background/85 px-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] xl:min-w-[12rem]">
+                <BoardControlSelect
                   aria-label="Sort visible task cards"
-                  value={sortOrder}
-                  className="border-0 bg-transparent shadow-none"
-                  onChange={(event) =>
-                    setSortOrder(event.target.value as BoardTaskSort)
+                  value={selectedSortLabel}
+                  menuValue={sortOrder}
+                  onValueChange={(value) =>
+                    setSortOrder(value as BoardTaskSort)
                   }
-                >
-                  <option value="DEFAULT">Board order</option>
-                  <option value="DUE_DATE">Due date</option>
-                  <option value="NEWEST_UPDATED">Newest updated</option>
-                  <option value="OLDEST_CREATED">Oldest created</option>
-                </Select>
+                  options={sortOptions}
+                />
               </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {boardFilters.map((filter) => (
               <button
                 key={filter.label}
                 type="button"
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-                  filter.active
-                    ? "border-border bg-background text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-                    : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                  filter.statusId === "ALL" || filter.color === null
+                    ? cn(
+                        "inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                        filter.active
+                          ? "bg-background text-foreground ring-1 ring-border/70 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                      )
+                    : getTaskStatusChipClassName(
+                        {
+                          id: filter.statusId,
+                          name: filter.label,
+                          position: 0,
+                          isClosed: false,
+                          color: filter.color,
+                        },
+                        filter.active,
+                      ),
                 )}
+                aria-pressed={filter.active}
+                onClick={() => setStatusFilter(filter.statusId)}
               >
                 <span>{filter.label}</span>
                 <span
                   className={cn(
-                    "rounded-full px-1.5 py-0.5 text-[11px] font-semibold",
+                    "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
                     filter.active
                       ? "bg-primary/10 text-primary"
-                      : "bg-muted text-muted-foreground",
+                      : "bg-muted/70 text-muted-foreground",
                   )}
                 >
                   {filter.value}
@@ -795,8 +850,10 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
           name: status.name,
           position: status.position,
           isClosed: status.isClosed,
+          color: status.color,
         }))}
         initialStatusId={drawerInitialStatusId}
+        onStatusChange={handleTaskStatusMove}
         isCreatePending={createTaskMutation.isPending}
         isUpdatePending={updateTaskMutation.isPending}
         isDeletePending={deleteTaskMutation.isPending}
@@ -936,11 +993,50 @@ function BoardLaneSkeleton({ title }: { title: string }) {
   );
 }
 
+function BoardControlSelect({
+  "aria-label": ariaLabel,
+  menuValue,
+  onValueChange,
+  options,
+  value,
+}: {
+  "aria-label": string;
+  menuValue: string;
+  onValueChange: (value: string) => void;
+  options: Array<{ label: string; value: string }>;
+  value: string;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          className="inline-flex h-10 w-full items-center justify-between gap-3 rounded-full px-3 text-sm text-foreground outline-none transition-colors hover:bg-muted/35 focus-visible:ring-2 focus-visible:ring-ring/40"
+        >
+          <span className="truncate">{value}</span>
+          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[13rem]">
+        <DropdownMenuRadioGroup value={menuValue} onValueChange={onValueChange}>
+          {options.map((option) => (
+            <DropdownMenuRadioItem key={option.value} value={option.value}>
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function getSkeletonLaneStatus(title: string): TaskStatus {
   return {
     id: `skeleton-${title.toLowerCase().replace(/\s+/g, "-")}`,
     name: title,
     position: title === "Done" ? 3 : title === "In Progress" ? 2 : 1,
     isClosed: title === "Done",
+    color: title === "Done" ? "GREEN" : title === "In Progress" ? "BLUE" : "SLATE",
   };
 }
