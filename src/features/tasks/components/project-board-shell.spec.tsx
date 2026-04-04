@@ -163,6 +163,10 @@ vi.mock("@/features/projects/components/invite-member-dialog", () => ({
   InviteMemberDialog: () => <div data-testid="invite-member-dialog" />,
 }));
 
+vi.mock("@/features/projects/components/create-project-status-dialog", () => ({
+  CreateProjectStatusDialog: () => <div data-testid="create-project-status-dialog" />,
+}));
+
 vi.mock("@/features/tasks/services/get-task-logs", () => ({
   getTaskLogs: getTaskLogsMock,
 }));
@@ -293,12 +297,53 @@ let taskLogState: Record<string, Array<{
   createdAt: string;
 }>> = {};
 
-function createTaskGroupsFromState(tasks: TaskState) {
-  return {
-    TODO: tasks.filter((task) => task.status === "TODO"),
-    IN_PROGRESS: tasks.filter((task) => task.status === "IN_PROGRESS"),
-    DONE: tasks.filter((task) => task.status === "DONE"),
+const STATUS_DEFINITIONS = {
+  DONE: {
+    id: "status-done",
+    name: "Done",
+    position: 3,
+    isClosed: true,
+  },
+  IN_PROGRESS: {
+    id: "status-progress",
+    name: "In Progress",
+    position: 2,
+    isClosed: false,
+  },
+  TODO: {
+    id: "status-todo",
+    name: "Todo",
+    position: 1,
+    isClosed: false,
+  },
+} as const;
+
+function createTaskCardFromState(
+  task: TaskState[number],
+  overrides: Partial<TaskState[number]> = {},
+) {
+  const nextTask = {
+    ...task,
+    ...overrides,
   };
+  const status = STATUS_DEFINITIONS[nextTask.status];
+
+  return {
+    ...nextTask,
+    statusId: status.id,
+    status,
+  };
+}
+
+function createProjectStatusesFromState(tasks: TaskState) {
+  return (Object.keys(STATUS_DEFINITIONS) as Array<keyof typeof STATUS_DEFINITIONS>)
+    .map((statusKey) => ({
+      ...STATUS_DEFINITIONS[statusKey],
+      tasks: tasks
+        .filter((task) => task.status === statusKey)
+        .map((task) => createTaskCardFromState(task)),
+    }))
+    .sort((left, right) => left.position - right.position);
 }
 
 function createProjectSummaryFromTasks(tasks: TaskState) {
@@ -307,24 +352,18 @@ function createProjectSummaryFromTasks(tasks: TaskState) {
     name: "QA readiness",
     description: "Track the final validation work before release.",
     role: "OWNER" as const,
-    taskCounts: {
-      TODO: tasks.filter((task) => task.status === "TODO").length,
-      IN_PROGRESS: tasks.filter((task) => task.status === "IN_PROGRESS").length,
-      DONE: tasks.filter((task) => task.status === "DONE").length,
-    },
+    statuses: createProjectStatusesFromState(tasks).map((status) => ({
+      id: status.id,
+      name: status.name,
+      position: status.position,
+      isClosed: status.isClosed,
+      taskCount: status.tasks.length,
+    })),
   };
 }
 
 function formatTaskStatusLabel(status: "TODO" | "IN_PROGRESS" | "DONE") {
-  if (status === "IN_PROGRESS") {
-    return "In progress";
-  }
-
-  if (status === "DONE") {
-    return "Done";
-  }
-
-  return "Todo";
+  return STATUS_DEFINITIONS[status].name;
 }
 
 describe("ProjectBoardShell", () => {
@@ -376,7 +415,7 @@ describe("ProjectBoardShell", () => {
       items: [createProjectSummaryFromTasks(taskState)],
     }));
     getProjectTasksMock.mockImplementation(async () => ({
-      taskGroups: createTaskGroupsFromState(taskState),
+      statuses: createProjectStatusesFromState(taskState),
     }));
     getProjectDetailMock.mockResolvedValue({
       id: "qa-readiness",
@@ -394,7 +433,7 @@ describe("ProjectBoardShell", () => {
           role: "OWNER",
         },
       ],
-      taskGroups: createTaskGroupsFromState(taskState),
+      statuses: createProjectStatusesFromState(taskState),
     });
     getTaskLogsMock.mockImplementation(async (taskId: string) => ({
       items: taskLogState[taskId] ?? [],
@@ -411,25 +450,33 @@ describe("ProjectBoardShell", () => {
         request: {
           title: string;
           description?: string;
-          status?: "TODO" | "IN_PROGRESS" | "DONE";
+          statusId?: string;
           assigneeId?: string;
           dueDate?: string;
         },
       ) => {
-        const createdTask = {
+        const status =
+          Object.values(STATUS_DEFINITIONS).find(
+            (entry) => entry.id === request.statusId,
+          ) ?? STATUS_DEFINITIONS.TODO;
+        const createdTaskState: TaskState[number] = {
           id: "task-new",
           projectId,
           title: request.title,
           description: request.description ?? null,
-          status: request.status ?? "TODO",
+          status:
+            (Object.entries(STATUS_DEFINITIONS).find(
+              ([, entry]) => entry.id === status.id,
+            )?.[0] as TaskState[number]["status"] | undefined) ?? "TODO",
           position: null,
           assigneeId: request.assigneeId ?? null,
           dueDate: request.dueDate ?? null,
           createdAt: "2026-04-04T09:00:00.000Z",
           updatedAt: "2026-04-04T09:00:00.000Z",
         };
+        const createdTask = createTaskCardFromState(createdTaskState);
 
-        taskState = [...taskState, createdTask];
+        taskState = [...taskState, createdTaskState];
         taskLogState = {
           ...taskLogState,
           [createdTask.id]: [
@@ -503,7 +550,7 @@ describe("ProjectBoardShell", () => {
     patchTaskStatusMock.mockImplementation(
       async (
         taskId: string,
-        request: { status: "TODO" | "IN_PROGRESS" | "DONE"; position?: number | null },
+        request: { statusId: string; position?: number | null },
       ) => {
         const existingTask = taskState.find((task) => task.id === taskId);
 
@@ -511,15 +558,25 @@ describe("ProjectBoardShell", () => {
           throw new Error("Task not found");
         }
 
-        const updatedTask = {
+        const nextStatusEntry =
+          Object.entries(STATUS_DEFINITIONS).find(
+            ([, entry]) => entry.id === request.statusId,
+          ) ?? null;
+
+        if (!nextStatusEntry) {
+          throw new Error("Status not found");
+        }
+
+        const updatedTaskState: TaskState[number] = {
           ...existingTask,
-          status: request.status,
+          status: nextStatusEntry[0] as TaskState[number]["status"],
           position: request.position ?? null,
           updatedAt: "2026-04-06T09:00:00.000Z",
         };
+        const updatedTask = createTaskCardFromState(updatedTaskState);
 
         taskState = taskState.map((task) =>
-          task.id === taskId ? updatedTask : task,
+          task.id === taskId ? updatedTaskState : task,
         );
         taskLogState = {
           ...taskLogState,
@@ -529,8 +586,8 @@ describe("ProjectBoardShell", () => {
               eventType: "STATUS_CHANGED",
               fieldName: "status",
               oldValue: existingTask.status,
-              newValue: request.status,
-              summary: `Member User moved the task from ${formatTaskStatusLabel(existingTask.status)} to ${formatTaskStatusLabel(request.status)}`,
+              newValue: updatedTaskState.status,
+              summary: `Member User moved the task from ${formatTaskStatusLabel(existingTask.status)} to ${formatTaskStatusLabel(updatedTaskState.status)}`,
               actor: {
                 id: "member-1",
                 name: "Member User",
@@ -555,22 +612,7 @@ describe("ProjectBoardShell", () => {
 
   it("shows a loading state before grouped tasks resolve", async () => {
     const deferredTasks = createDeferredPromise<{
-      taskGroups: {
-        TODO: Array<{
-          id: string;
-          projectId: string;
-          title: string;
-          description: string | null;
-          status: "TODO";
-          position: number | null;
-          assigneeId: string | null;
-          dueDate: string | null;
-          createdAt: string;
-          updatedAt: string;
-        }>;
-        IN_PROGRESS: [];
-        DONE: [];
-      };
+      statuses: ReturnType<typeof createProjectStatusesFromState>;
     }>();
 
     getProjectTasksMock.mockReturnValueOnce(deferredTasks.promise);
@@ -580,24 +622,20 @@ describe("ProjectBoardShell", () => {
     expect(screen.getByLabelText("Loading project tasks")).toBeInTheDocument();
 
     deferredTasks.resolve({
-      taskGroups: {
-        TODO: [
-          {
-            id: "task-api-envelope",
-            projectId: "qa-readiness",
-            title: "Draft API envelope",
-            description: "Align response metadata before the live board ships.",
-            status: "TODO",
-            position: 1,
-            assigneeId: null,
-            dueDate: null,
-            createdAt: "2026-04-01T09:00:00.000Z",
-            updatedAt: "2026-04-01T09:00:00.000Z",
-          },
-        ],
-        IN_PROGRESS: [],
-        DONE: [],
-      },
+      statuses: createProjectStatusesFromState([
+        {
+          id: "task-api-envelope",
+          projectId: "qa-readiness",
+          title: "Draft API envelope",
+          description: "Align response metadata before the live board ships.",
+          status: "TODO",
+          position: 1,
+          assigneeId: null,
+          dueDate: null,
+          createdAt: "2026-04-01T09:00:00.000Z",
+          updatedAt: "2026-04-01T09:00:00.000Z",
+        },
+      ]),
     });
 
     expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
@@ -626,7 +664,7 @@ describe("ProjectBoardShell", () => {
     expect(screen.getByTestId("board-lanes-scroll-area")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Todo" })).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "In progress" }),
+      screen.getByRole("heading", { name: "In Progress" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Done" })).toBeInTheDocument();
     expect(
@@ -668,7 +706,7 @@ describe("ProjectBoardShell", () => {
           fieldName: "status",
           oldValue: "TODO",
           newValue: "IN_PROGRESS",
-          summary: "Member User moved the task from Todo to In progress",
+          summary: "Member User moved the task from Todo to In Progress",
           actor: {
             id: "member-1",
             name: "Member User",
@@ -677,7 +715,9 @@ describe("ProjectBoardShell", () => {
           task: {
             id: "task-api-envelope",
             title: "Draft API envelope",
-            status: "IN_PROGRESS",
+            statusId: STATUS_DEFINITIONS.IN_PROGRESS.id,
+            statusName: STATUS_DEFINITIONS.IN_PROGRESS.name,
+            isClosed: STATUS_DEFINITIONS.IN_PROGRESS.isClosed,
           },
         },
       ],
@@ -703,7 +743,7 @@ describe("ProjectBoardShell", () => {
       await screen.findByLabelText("Search project activity"),
     ).toBeInTheDocument();
     expect(
-      await screen.findByText("Member User moved the task from Todo to In progress"),
+      await screen.findByText("Member User moved the task from Todo to In Progress"),
     ).toBeInTheDocument();
     expect(getProjectActivityMock).toHaveBeenCalledWith("qa-readiness", {
       eventType: "ALL",
@@ -731,31 +771,33 @@ describe("ProjectBoardShell", () => {
 
     await act(async () => {
       dndMock.triggerDragStart("task-api-envelope");
-      dndMock.triggerDragEnd("task-api-envelope", "DONE");
+      dndMock.triggerDragEnd("task-api-envelope", STATUS_DEFINITIONS.DONE.id);
     });
 
     await waitFor(() => {
       expect(patchTaskStatusMock).toHaveBeenCalledWith("task-api-envelope", {
-        status: "DONE",
+        statusId: STATUS_DEFINITIONS.DONE.id,
       });
     });
 
-    expect(
-      within(screen.getByTestId("lane-done")).getByText("Draft API envelope"),
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId("lane-todo")).queryByText("Draft API envelope"),
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        within(screen.getByTestId("lane-done")).getByText("Draft API envelope"),
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId("lane-todo")).queryByText("Draft API envelope"),
+      ).not.toBeInTheDocument();
+    });
 
     expect(queryClient.getQueryData(projectsQueryKey)).toMatchObject({
       items: [
         {
           id: "qa-readiness",
-          taskCounts: {
-            TODO: 0,
-            IN_PROGRESS: 1,
-            DONE: 1,
-          },
+          statuses: [
+            { id: STATUS_DEFINITIONS.TODO.id, taskCount: 0 },
+            { id: STATUS_DEFINITIONS.IN_PROGRESS.id, taskCount: 1 },
+            { id: STATUS_DEFINITIONS.DONE.id, taskCount: 1 },
+          ],
         },
       ],
     });
@@ -776,7 +818,7 @@ describe("ProjectBoardShell", () => {
     expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
 
     await act(async () => {
-      dndMock.triggerDragEnd("task-api-envelope", "DONE");
+      dndMock.triggerDragEnd("task-api-envelope", STATUS_DEFINITIONS.DONE.id);
     });
 
     await waitFor(() => {
@@ -797,11 +839,11 @@ describe("ProjectBoardShell", () => {
       items: [
         {
           id: "qa-readiness",
-          taskCounts: {
-            TODO: 1,
-            IN_PROGRESS: 1,
-            DONE: 0,
-          },
+          statuses: [
+            { id: STATUS_DEFINITIONS.TODO.id, taskCount: 1 },
+            { id: STATUS_DEFINITIONS.IN_PROGRESS.id, taskCount: 1 },
+            { id: STATUS_DEFINITIONS.DONE.id, taskCount: 0 },
+          ],
         },
       ],
     });
@@ -828,7 +870,7 @@ describe("ProjectBoardShell", () => {
     await waitFor(() => {
       expect(createTaskMock).toHaveBeenCalledWith("qa-readiness", {
         title: "Prepare qa wrap-up",
-        status: "TODO",
+        statusId: STATUS_DEFINITIONS.TODO.id,
       });
     });
   });
@@ -843,7 +885,7 @@ describe("ProjectBoardShell", () => {
     expect(
       await screen.findByRole("dialog", { name: /create task/i }),
     ).toBeInTheDocument();
-    expect(await screen.findByRole("option", { name: "Jordan Lane" })).toBeInTheDocument();
+    expect((await screen.findAllByRole("option", { name: /Jordan Lane/ })).length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByLabelText("Task title"), {
       target: { value: "Publish smoke notes" },
@@ -863,7 +905,7 @@ describe("ProjectBoardShell", () => {
     await waitFor(() => {
       expect(createTaskMock).toHaveBeenCalledWith("qa-readiness", {
         title: "Publish smoke notes",
-        status: "DONE",
+        statusId: STATUS_DEFINITIONS.DONE.id,
         assigneeId: "member-1",
         dueDate: "2026-04-12",
       });
@@ -948,24 +990,20 @@ describe("ProjectBoardShell", () => {
 
   it("keeps all three columns visible and shows empty-lane guidance", async () => {
     getProjectTasksMock.mockResolvedValueOnce({
-      taskGroups: {
-        TODO: [],
-        IN_PROGRESS: [],
-        DONE: [
-          {
-            id: "task-complete",
-            projectId: "qa-readiness",
-            title: "Publish smoke notes",
-            description: null,
-            status: "DONE",
-            position: null,
-            assigneeId: null,
-            dueDate: null,
-            createdAt: "2026-04-03T09:00:00.000Z",
-            updatedAt: "2026-04-03T09:00:00.000Z",
-          },
-        ],
-      },
+      statuses: createProjectStatusesFromState([
+        {
+          id: "task-complete",
+          projectId: "qa-readiness",
+          title: "Publish smoke notes",
+          description: null,
+          status: "DONE",
+          position: null,
+          assigneeId: null,
+          dueDate: null,
+          createdAt: "2026-04-03T09:00:00.000Z",
+          updatedAt: "2026-04-03T09:00:00.000Z",
+        },
+      ]),
     });
 
     renderBoard();
@@ -974,7 +1012,7 @@ describe("ProjectBoardShell", () => {
       await screen.findByText("Publish smoke notes"),
     ).toBeInTheDocument();
     expect(screen.getByText("No cards in Todo.")).toBeInTheDocument();
-    expect(screen.getByText("No cards in In progress.")).toBeInTheDocument();
+    expect(screen.getByText("No cards in In Progress.")).toBeInTheDocument();
     expect(screen.getByText("Publish smoke notes")).toBeInTheDocument();
   });
 
@@ -982,11 +1020,7 @@ describe("ProjectBoardShell", () => {
     getProjectTasksMock
       .mockRejectedValueOnce(new Error("Network failed"))
       .mockResolvedValueOnce({
-        taskGroups: {
-          TODO: [],
-          IN_PROGRESS: [],
-          DONE: [],
-        },
+        statuses: createProjectStatusesFromState([]),
       });
 
     renderBoard();
@@ -1104,7 +1138,7 @@ describe("ProjectBoardShell", () => {
         fieldName: "status",
         oldValue: "TODO",
         newValue: "IN_PROGRESS",
-        summary: "Member User moved the task from Todo to In progress",
+        summary: "Member User moved the task from Todo to In Progress",
         actor: {
           id: "member-1",
           name: "Member User",
@@ -1148,11 +1182,11 @@ describe("ProjectBoardShell", () => {
     fireEvent.click(screen.getByRole("button", { name: /retry loading logs/i }));
 
     expect(
-      await screen.findByText("Member User moved the task from Todo to In progress"),
+      await screen.findByText("Member User moved the task from Todo to In Progress"),
     ).toBeInTheDocument();
 
     const logItems = screen.getAllByRole("listitem");
-    expect(logItems[0]).toHaveTextContent("Member User moved the task from Todo to In progress");
+    expect(logItems[0]).toHaveTextContent("Member User moved the task from Todo to In Progress");
     expect(logItems[1]).toHaveTextContent("Member User created the task");
   });
 
@@ -1181,12 +1215,14 @@ describe("ProjectBoardShell", () => {
     ).toBeInTheDocument();
 
     await act(async () => {
-      dndMock.triggerDragEnd("task-refresh-flow", "DONE");
+      dndMock.triggerDragEnd("task-refresh-flow", STATUS_DEFINITIONS.DONE.id);
     });
 
-    expect(
-      await screen.findByText("Member User moved the task from In progress to Done"),
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByText("Member User moved the task from In Progress to Done"),
+      ).toBeInTheDocument();
+    });
     expect(getTaskLogsMock).toHaveBeenCalledWith("task-refresh-flow", {
       page: 1,
       pageSize: 10,

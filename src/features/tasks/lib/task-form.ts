@@ -2,14 +2,13 @@ import type { ApiErrorDetails } from "@/contracts/api";
 import type {
   CreateTaskRequest,
   TaskCard,
-  TaskStatus,
   UpdateTaskRequest,
 } from "@/contracts/tasks";
 
 export type TaskFormValues = {
   title: string;
   description: string;
-  status: TaskStatus;
+  statusId: string;
   assigneeId: string;
   dueDate: string;
 };
@@ -19,14 +18,14 @@ export type TaskFormErrors = Partial<
 >;
 
 export function createTaskFormValues(
-  status: TaskStatus,
+  statusId: string,
   task?: TaskCard | null,
 ): TaskFormValues {
   if (!task) {
     return {
       title: "",
       description: "",
-      status,
+      statusId,
       assigneeId: "",
       dueDate: "",
     };
@@ -35,7 +34,7 @@ export function createTaskFormValues(
   return {
     title: task.title,
     description: task.description ?? "",
-    status: task.status,
+    statusId: task.statusId,
     assigneeId: task.assigneeId ?? "",
     dueDate: task.dueDate ?? "",
   };
@@ -51,7 +50,7 @@ export function normalizeCreateTaskFormValues(
 
   return {
     title: normalizedTitle,
-    status: values.status,
+    statusId: values.statusId,
     ...(normalizedDescription ? { description: normalizedDescription } : {}),
     ...(normalizedAssigneeId ? { assigneeId: normalizedAssigneeId } : {}),
     ...(normalizedDueDate ? { dueDate: normalizedDueDate } : {}),

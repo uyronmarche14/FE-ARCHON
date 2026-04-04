@@ -2,7 +2,7 @@
 
 import { ArrowRight, CalendarClock, Clock3, FileText, Layers3, PencilLine, Sparkles, UserRound } from "lucide-react";
 import type { ProjectActivityEntry } from "@/contracts/projects";
-import type { TaskLogEntry, TaskStatus } from "@/contracts/tasks";
+import type { TaskLogEntry } from "@/contracts/tasks";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -132,12 +132,12 @@ function TaskActivityChange({
         >
           Transition
         </span>
-          <Badge variant={getStatusBadgeVariant(entry.oldValue as TaskStatus)} size="xs">
-            {formatTaskStatusLabel(entry.oldValue as TaskStatus)}
+          <Badge variant={getStatusBadgeVariant(entry.oldValue)} size="xs">
+            {formatTaskStatusLabel(entry.oldValue)}
           </Badge>
           <ArrowRight className="size-4 text-muted-foreground" />
-          <Badge variant={getStatusBadgeVariant(entry.newValue as TaskStatus)} size="xs">
-            {formatTaskStatusLabel(entry.newValue as TaskStatus)}
+          <Badge variant={getStatusBadgeVariant(entry.newValue)} size="xs">
+            {formatTaskStatusLabel(entry.newValue)}
           </Badge>
       </section>
     );
@@ -269,12 +269,27 @@ function getEventIconSurfaceClassName(eventType: ActivityEntry["eventType"]) {
   return "border-done/15 bg-done/[0.12] text-done";
 }
 
-function getStatusBadgeVariant(status: TaskStatus) {
-  if (status === "IN_PROGRESS") {
+function getStatusBadgeVariant(status: unknown) {
+  if (typeof status !== "string") {
+    return "todo" as const;
+  }
+
+  const normalizedStatus = status.trim().toLowerCase();
+
+  if (
+    normalizedStatus.includes("progress") ||
+    normalizedStatus.includes("doing") ||
+    normalizedStatus.includes("active") ||
+    normalizedStatus.includes("review")
+  ) {
     return "progress" as const;
   }
 
-  if (status === "DONE") {
+  if (
+    normalizedStatus.includes("done") ||
+    normalizedStatus.includes("complete") ||
+    normalizedStatus.includes("closed")
+  ) {
     return "done" as const;
   }
 

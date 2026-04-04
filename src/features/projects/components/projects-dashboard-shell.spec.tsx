@@ -2,23 +2,14 @@ import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ProjectSummary } from "@/contracts/projects";
 import { ProjectsDashboardShell } from "@/features/projects/components/projects-dashboard-shell";
 
 const navigationState = vi.hoisted(() => ({
   push: vi.fn(),
 }));
 
-let projectsState: Array<{
-  id: string;
-  name: string;
-  description: string | null;
-  role: "OWNER" | "MEMBER";
-  taskCounts: {
-    TODO: number;
-    IN_PROGRESS: number;
-    DONE: number;
-  };
-}> = [];
+let projectsState: ProjectSummary[] = [];
 
 const getProjectsMock = vi.hoisted(() => vi.fn());
 const createProjectMock = vi.hoisted(() => vi.fn());
@@ -213,17 +204,12 @@ describe("ProjectsDashboardShell", () => {
 
     deferredProjects.resolve({
       items: [
-        {
-          id: "launch-planning",
-          name: "Launch planning",
+        createProjectSummary("launch-planning", "Launch planning", {
+          todo: 4,
+          inProgress: 2,
+          done: 5,
           description: "Coordinate the release work across the team.",
-          role: "OWNER",
-          taskCounts: {
-            TODO: 4,
-            IN_PROGRESS: 2,
-            DONE: 5,
-          },
-        },
+        }),
       ],
     });
 
@@ -239,28 +225,18 @@ describe("ProjectsDashboardShell", () => {
   it("renders projects without any dashboard preview surface", async () => {
     getProjectsMock.mockResolvedValueOnce({
       items: [
-        {
-          id: "launch-planning",
-          name: "Launch planning",
+        createProjectSummary("launch-planning", "Launch planning", {
+          todo: 4,
+          inProgress: 2,
+          done: 5,
           description: "Coordinate the release work across the team.",
-          role: "OWNER",
-          taskCounts: {
-            TODO: 4,
-            IN_PROGRESS: 2,
-            DONE: 5,
-          },
-        },
-        {
-          id: "qa-readiness",
-          name: "QA readiness",
+        }),
+        createProjectSummary("qa-readiness", "QA readiness", {
+          todo: 1,
+          inProgress: 3,
+          done: 2,
           description: "Track validation and smoke checks.",
-          role: "OWNER",
-          taskCounts: {
-            TODO: 1,
-            IN_PROGRESS: 3,
-            DONE: 2,
-          },
-        },
+        }),
       ],
     });
 
@@ -289,17 +265,12 @@ describe("ProjectsDashboardShell", () => {
 
   it("validates, creates, refreshes, and routes into the new project", async () => {
     projectsState = [
-      {
-        id: "launch-planning",
-        name: "Launch planning",
+      createProjectSummary("launch-planning", "Launch planning", {
+        todo: 4,
+        inProgress: 2,
+        done: 5,
         description: "Coordinate the release work across the team.",
-        role: "OWNER",
-        taskCounts: {
-          TODO: 4,
-          IN_PROGRESS: 2,
-          DONE: 5,
-        },
-      },
+      }),
     ];
 
     getProjectsMock.mockImplementation(async () => ({
@@ -308,15 +279,12 @@ describe("ProjectsDashboardShell", () => {
     createProjectMock.mockImplementation(
       async (request: { name: string; description?: string }) => {
         const createdProject = {
-          id: "qa-readiness",
-          name: request.name,
-          description: request.description ?? null,
-          role: "OWNER" as const,
-          taskCounts: {
-            TODO: 0,
-            IN_PROGRESS: 0,
-            DONE: 0,
-          },
+          ...createProjectSummary("qa-readiness", request.name, {
+            todo: 0,
+            inProgress: 0,
+            done: 0,
+            description: request.description ?? null,
+          }),
         };
 
         projectsState = [createdProject, ...projectsState];
@@ -382,3 +350,45 @@ describe("ProjectsDashboardShell", () => {
     );
   });
 });
+
+function createProjectSummary(
+  id: string,
+  name: string,
+  options: {
+    description?: string | null;
+    done: number;
+    inProgress: number;
+    role?: "OWNER" | "MEMBER";
+    todo: number;
+  },
+): ProjectSummary {
+  return {
+    id,
+    name,
+    description: options.description ?? null,
+    role: options.role ?? "OWNER",
+    statuses: [
+      {
+        id: `${id}-status-todo`,
+        name: "Todo",
+        position: 1,
+        isClosed: false,
+        taskCount: options.todo,
+      },
+      {
+        id: `${id}-status-progress`,
+        name: "In Progress",
+        position: 2,
+        isClosed: false,
+        taskCount: options.inProgress,
+      },
+      {
+        id: `${id}-status-done`,
+        name: "Done",
+        position: 3,
+        isClosed: true,
+        taskCount: options.done,
+      },
+    ],
+  };
+}

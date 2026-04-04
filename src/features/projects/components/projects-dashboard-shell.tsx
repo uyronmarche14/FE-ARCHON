@@ -27,13 +27,13 @@ export function ProjectsDashboardShell() {
 
   const totals = useMemo(() => {
     const totalTrackedTasks = projects.reduce((total, project) => {
-      return total + getProjectTotalTaskCount(project.taskCounts);
+      return total + getProjectTotalTaskCount(project.statuses);
     }, 0);
     const totalOpenTasks = projects.reduce((total, project) => {
-      return total + getProjectOpenTaskCount(project.taskCounts);
+      return total + getProjectOpenTaskCount(project.statuses);
     }, 0);
     const totalDoneTasks = projects.reduce((total, project) => {
-      return total + project.taskCounts.DONE;
+      return total + getProjectCompletionCount(project);
     }, 0);
 
     return {
@@ -254,9 +254,9 @@ function ProjectDashboardCard({
 }: {
   project: ProjectSummary;
 }) {
-  const totalTasks = getProjectTotalTaskCount(project.taskCounts);
-  const openTasks = getProjectOpenTaskCount(project.taskCounts);
-  const completion = getProjectCompletionPercentage(project.taskCounts);
+  const totalTasks = getProjectTotalTaskCount(project.statuses);
+  const openTasks = getProjectOpenTaskCount(project.statuses);
+  const completion = getProjectCompletionPercentage(project.statuses);
 
   return (
     <article className="rounded-[1rem] border border-border/75 bg-linear-to-br from-background via-background to-surface-subtle/55 p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
@@ -298,15 +298,11 @@ function ProjectDashboardCard({
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
-        <Badge variant="todo" size="xs">
-          Todo {project.taskCounts.TODO}
-        </Badge>
-        <Badge variant="progress" size="xs">
-          In progress {project.taskCounts.IN_PROGRESS}
-        </Badge>
-        <Badge variant="done" size="xs">
-          Done {project.taskCounts.DONE}
-        </Badge>
+        {project.statuses.map((status) => (
+          <Badge key={status.id} variant={getStatusBadgeVariant(status)} size="xs">
+            {status.name} {status.taskCount}
+          </Badge>
+        ))}
       </div>
 
       <div className="mt-4 flex justify-end">
@@ -336,4 +332,30 @@ function ProjectCardMetric({
       <p className="mt-1 text-lg font-semibold tracking-tight">{value}</p>
     </div>
   );
+}
+
+function getProjectCompletionCount(project: ProjectSummary) {
+  return project.statuses.reduce(
+    (total, status) => total + (status.isClosed ? status.taskCount : 0),
+    0,
+  );
+}
+
+function getStatusBadgeVariant(status: ProjectSummary["statuses"][number]) {
+  if (status.isClosed) {
+    return "done" as const;
+  }
+
+  const normalizedName = status.name.trim().toLowerCase();
+
+  if (
+    normalizedName.includes("progress") ||
+    normalizedName.includes("doing") ||
+    normalizedName.includes("active") ||
+    normalizedName.includes("review")
+  ) {
+    return "progress" as const;
+  }
+
+  return "todo" as const;
 }

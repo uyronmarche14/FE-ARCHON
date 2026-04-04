@@ -43,7 +43,8 @@ type TaskDrawerProps = {
   memberLookup?: TaskMemberLookup;
   projectId: string;
   task: TaskCard | null;
-  initialStatus: TaskStatus;
+  statuses: TaskStatus[];
+  initialStatusId: string;
   isCreatePending?: boolean;
   isUpdatePending?: boolean;
   isDeletePending?: boolean;
@@ -60,7 +61,8 @@ export function TaskDrawer({
   memberLookup,
   projectId,
   task,
-  initialStatus,
+  statuses,
+  initialStatusId,
   isCreatePending = false,
   isUpdatePending = false,
   isDeletePending = false,
@@ -81,7 +83,7 @@ export function TaskDrawer({
   const taskLogEntries =
     taskLogsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const [formValues, setFormValues] = useState<TaskFormValues>(
-    createTaskFormValues(initialStatus, task),
+    createTaskFormValues(initialStatusId, task),
   );
   const [fieldErrors, setFieldErrors] = useState<TaskFormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -197,6 +199,7 @@ export function TaskDrawer({
               values={formValues}
               errors={fieldErrors}
               members={membersQuery.data ?? []}
+              statuses={statuses}
               membersError={
                 membersQuery.isError
                   ? "Project members could not be loaded right now."
@@ -236,6 +239,7 @@ export function TaskDrawer({
               values={formValues}
               errors={fieldErrors}
               members={membersQuery.data ?? []}
+              statuses={statuses}
               membersError={
                 membersQuery.isError
                   ? "Project members could not be loaded right now."

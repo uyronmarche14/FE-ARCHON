@@ -52,7 +52,7 @@ describe("TaskLogsTimeline", () => {
             fieldName: "status",
             oldValue: "TODO",
             newValue: "IN_PROGRESS",
-            summary: "Member User moved the task from Todo to In progress",
+            summary: "Member User moved the task from Todo to In Progress",
             actor: {
               id: "member-1",
               name: "Member User",
@@ -105,7 +105,7 @@ describe("TaskLogsTimeline", () => {
       />,
     );
 
-    expect(screen.getByText("In progress")).toBeInTheDocument();
+    expect(screen.getByText("In Progress")).toBeInTheDocument();
     expect(screen.getByText("Jordan Lane")).toBeInTheDocument();
     expect(screen.getByText("Apr 20, 2026")).toBeInTheDocument();
     expect(screen.getAllByText("No description")).toHaveLength(2);

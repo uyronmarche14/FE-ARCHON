@@ -13,7 +13,10 @@ import type {
   TaskFormErrors,
   TaskFormValues,
 } from "@/features/tasks/lib/task-form";
-import { TASK_STATUSES, formatTaskStatusLabel } from "@/features/tasks/lib/task-board";
+import {
+  formatTaskStatusLabel,
+  getTaskStatusTone,
+} from "@/features/tasks/lib/task-board";
 import { cn } from "@/lib/utils";
 
 type TaskFormProps = {
@@ -21,6 +24,7 @@ type TaskFormProps = {
   values: TaskFormValues;
   errors: TaskFormErrors;
   members: ProjectMember[];
+  statuses: TaskStatus[];
   membersError?: string | null;
   membersLoading?: boolean;
   formError?: string | null;
@@ -41,6 +45,7 @@ export function TaskForm({
   values,
   errors,
   members,
+  statuses,
   membersError,
   membersLoading = false,
   formError,
@@ -68,18 +73,18 @@ export function TaskForm({
             </Badge>
           </div>
           <div className="flex flex-wrap gap-2">
-            {TASK_STATUSES.map((status) => (
+            {statuses.map((status) => (
               <button
-                key={status}
+                key={status.id}
                 type="button"
                 className={cn(
                   "inline-flex items-center rounded-[0.95rem] border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-                  values.status === status
+                  values.statusId === status.id
                     ? "border-primary/30 bg-primary/[0.08] text-primary shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
                     : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
-                onClick={() => onValueChange("status", status)}
-                aria-pressed={values.status === status}
+                onClick={() => onValueChange("statusId", status.id)}
+                aria-pressed={values.statusId === status.id}
               >
                 <Badge variant={getStatusBadgeVariant(status)} size="xs">
                   {formatTaskStatusLabel(status)}
@@ -228,11 +233,13 @@ export function TaskForm({
 }
 
 function getStatusBadgeVariant(status: TaskStatus) {
-  if (status === "IN_PROGRESS") {
+  const tone = getTaskStatusTone(status);
+
+  if (tone === "progress") {
     return "progress" as const;
   }
 
-  if (status === "DONE") {
+  if (tone === "done") {
     return "done" as const;
   }
 

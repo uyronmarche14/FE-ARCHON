@@ -10,6 +10,7 @@ import {
   getTaskAssigneeLabel,
   getTaskDueLabel,
   getTaskPositionLabel,
+  getTaskStatusTone,
   getTaskUpdatedLabel,
   type TaskMemberLookup,
 } from "@/features/tasks/lib/task-board";
@@ -142,11 +143,13 @@ function formatStatusLabel(status: TaskCard["status"]) {
 }
 
 function getStatusBadgeVariant(status: TaskCard["status"]) {
-  if (status === "IN_PROGRESS") {
+  const tone = getTaskStatusTone(status);
+
+  if (tone === "progress") {
     return "progress" as const;
   }
 
-  if (status === "DONE") {
+  if (tone === "done") {
     return "done" as const;
   }
 

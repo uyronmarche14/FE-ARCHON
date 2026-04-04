@@ -109,9 +109,9 @@ export function ProjectsSidebarNavigation({
             const href = getProjectPath(project.id) as Route;
             const active =
               pathname === href || pathname.startsWith(`${href}/`);
-            const totalTasks = getProjectTotalTaskCount(project.taskCounts);
-            const openTasks = getProjectOpenTaskCount(project.taskCounts);
-            const completion = getProjectCompletionPercentage(project.taskCounts);
+            const totalTasks = getProjectTotalTaskCount(project.statuses);
+            const openTasks = getProjectOpenTaskCount(project.statuses);
+            const completion = getProjectCompletionPercentage(project.statuses);
 
             return (
               <SidebarMenuItem key={project.id}>

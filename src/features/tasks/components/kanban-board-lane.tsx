@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import type { TaskCard as TaskCardData, TaskStatus } from "@/contracts/tasks";
+import type { TaskCard as TaskCardData } from "@/contracts/tasks";
 import {
   BoardColumn,
   BoardLaneEmptyState,
@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 type KanbanBoardLaneProps = {
   lane: BoardLane;
   memberLookup?: TaskMemberLookup;
-  onAddTask: (status: TaskStatus) => void;
+  onAddTask: (statusId: string) => void;
   onOpenTask: (task: TaskCardData) => void;
   presentation: "desktop" | "mobile";
 };
@@ -26,22 +26,22 @@ export function KanbanBoardLane({
   presentation,
 }: KanbanBoardLaneProps) {
   const { isOver, setNodeRef } = useDroppable({
-    id: lane.status,
+    id: lane.status.id,
     data: {
-      status: lane.status,
+      statusId: lane.status.id,
     },
   });
 
   return (
     <BoardColumn
       ref={setNodeRef}
-      dataTestId={`lane-${lane.status.toLowerCase().replace(/_/g, "-")}`}
+      dataTestId={`lane-${lane.status.name.toLowerCase().replace(/\s+/g, "-")}`}
       presentation={presentation}
       status={lane.status}
       title={lane.title}
       count={lane.tasks.length}
       description={lane.description}
-      onAddTask={() => onAddTask(lane.status)}
+      onAddTask={() => onAddTask(lane.status.id)}
       className={cn(isOver && "border-primary/30 ring-2 ring-primary/15")}
       bodyClassName={cn("min-h-[12rem]", isOver && "bg-primary/5")}
     >

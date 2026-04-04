@@ -1,10 +1,16 @@
-export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
+export type TaskStatus = {
+  id: string;
+  name: string;
+  position: number;
+  isClosed: boolean;
+};
 
 export type TaskCard = {
   id: string;
   projectId: string;
   title: string;
   description: string | null;
+  statusId: string;
   status: TaskStatus;
   position: number | null;
   assigneeId: string | null;
@@ -13,16 +19,18 @@ export type TaskCard = {
   updatedAt: string;
 };
 
-export type TaskGroups = Record<TaskStatus, TaskCard[]>;
+export type ProjectTaskStatus = TaskStatus & {
+  tasks: TaskCard[];
+};
 
 export type ProjectTasksResponse = {
-  taskGroups: TaskGroups;
+  statuses: ProjectTaskStatus[];
 };
 
 export type CreateTaskRequest = {
   title: string;
+  statusId?: string;
   description?: string;
-  status?: TaskStatus;
   assigneeId?: string;
   dueDate?: string;
 };
@@ -35,7 +43,7 @@ export type UpdateTaskRequest = {
 };
 
 export type UpdateTaskStatusRequest = {
-  status: TaskStatus;
+  statusId: string;
   position?: number | null;
 };
 

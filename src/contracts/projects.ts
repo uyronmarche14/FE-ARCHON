@@ -1,20 +1,25 @@
 import type {
-  TaskGroups,
+  ProjectTaskStatus,
   TaskLogEventType,
   TaskLogValue,
-  TaskStatus,
 } from "@/contracts/tasks";
 
-export type ProjectTaskCounts = Record<TaskStatus, number>;
-
 export type ProjectRole = "OWNER" | "MEMBER";
+
+export type ProjectStatusSummary = {
+  id: string;
+  name: string;
+  position: number;
+  isClosed: boolean;
+  taskCount: number;
+};
 
 export type ProjectSummary = {
   id: string;
   name: string;
   description: string | null;
   role: ProjectRole;
-  taskCounts: ProjectTaskCounts;
+  statuses: ProjectStatusSummary[];
 };
 
 export type ProjectsListResponse = {
@@ -32,13 +37,20 @@ export type ProjectDetail = {
   name: string;
   description: string | null;
   members: ProjectMember[];
-  taskGroups: TaskGroups;
+  statuses: ProjectTaskStatus[];
 };
 
 export type CreateProjectRequest = {
   name: string;
   description?: string;
 };
+
+export type CreateProjectStatusRequest = {
+  name: string;
+  isClosed?: boolean;
+};
+
+export type ProjectStatusResponse = ProjectStatusSummary;
 
 export type CreateProjectInviteRequest = {
   email: string;
@@ -88,7 +100,9 @@ export type ProjectActivityEntry = {
   task: {
     id: string;
     title: string;
-    status: TaskStatus;
+    statusId: string;
+    statusName: string;
+    isClosed: boolean;
   };
 };
 

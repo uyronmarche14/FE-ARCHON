@@ -11,7 +11,13 @@ const existingTask: TaskCard = {
   projectId: "qa-readiness",
   title: "Wire refresh token flow",
   description: "Keep session bootstrap calm during auth routing.",
-  status: "IN_PROGRESS",
+  statusId: "status-progress",
+  status: {
+    id: "status-progress",
+    name: "In Progress",
+    position: 2,
+    isClosed: false,
+  },
   position: null,
   assigneeId: "member-1",
   dueDate: "2026-04-10",
@@ -20,19 +26,19 @@ const existingTask: TaskCard = {
 };
 
 describe("task-form", () => {
-  it("normalizes create values and keeps create status", () => {
+  it("normalizes create values and keeps the selected status id", () => {
     expect(
       normalizeCreateTaskFormValues({
         title: "  Prepare   smoke notes  ",
         description: "  Capture launch checks.  ",
-        status: "DONE",
+        statusId: "status-done",
         assigneeId: " member-1 ",
         dueDate: " 2026-04-12 ",
       }),
     ).toEqual({
       title: "Prepare smoke notes",
       description: "Capture launch checks.",
-      status: "DONE",
+      statusId: "status-done",
       assigneeId: "member-1",
       dueDate: "2026-04-12",
     });
@@ -43,7 +49,7 @@ describe("task-form", () => {
       validateTaskFormValues({
         title: "   ",
         description: "",
-        status: "TODO",
+        statusId: "status-todo",
         assigneeId: "",
         dueDate: "not-a-date",
       }),
@@ -58,7 +64,7 @@ describe("task-form", () => {
       validateTaskFormValues({
         title: "Prepare smoke notes",
         description: "x".repeat(5001),
-        status: "TODO",
+        statusId: "status-todo",
         assigneeId: "",
         dueDate: "",
       }),
@@ -72,7 +78,7 @@ describe("task-form", () => {
       buildUpdateTaskRequest(existingTask, {
         title: "Wire refresh token flow",
         description: "",
-        status: "IN_PROGRESS",
+        statusId: "status-progress",
         assigneeId: "",
         dueDate: "",
       }),
@@ -88,7 +94,7 @@ describe("task-form", () => {
       buildUpdateTaskRequest(existingTask, {
         title: "  Wire   refresh token flow ",
         description: "Keep session bootstrap calm during auth routing.",
-        status: "IN_PROGRESS",
+        statusId: "status-progress",
         assigneeId: "member-1",
         dueDate: "2026-04-10",
       }),

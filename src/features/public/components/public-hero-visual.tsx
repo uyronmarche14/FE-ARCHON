@@ -12,13 +12,13 @@ import {
   createBoardLanes,
   createBoardMetrics,
   createTaskMemberLookup,
-  filterAndSortTaskGroups,
+  filterAndSortTaskStatuses,
 } from "@/features/tasks/lib/task-board";
 import {
   publicHeroActivityEntries,
   publicHeroBoardMeta,
   publicHeroMembers,
-  publicHeroTaskGroups,
+  publicHeroStatuses,
 } from "@/features/public/mock/public-hero-board";
 
 export function PublicHeroVisual() {
@@ -27,9 +27,9 @@ export function PublicHeroVisual() {
     () => createTaskMemberLookup(publicHeroMembers),
     [],
   );
-  const visibleTaskGroups = useMemo(
+  const visibleStatuses = useMemo(
     () =>
-      filterAndSortTaskGroups(publicHeroTaskGroups, {
+      filterAndSortTaskStatuses(publicHeroStatuses, {
         searchQuery,
         assigneeFilter: "ALL",
         dueDateFilter: "ALL",
@@ -37,10 +37,10 @@ export function PublicHeroVisual() {
       }),
     [searchQuery],
   );
-  const lanes = useMemo(() => createBoardLanes(visibleTaskGroups), [visibleTaskGroups]);
+  const lanes = useMemo(() => createBoardLanes(visibleStatuses), [visibleStatuses]);
   const metrics = useMemo(
-    () => createBoardMetrics(visibleTaskGroups),
-    [visibleTaskGroups],
+    () => createBoardMetrics(visibleStatuses),
+    [visibleStatuses],
   );
   const visibleActivityEntries = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -124,7 +124,7 @@ export function PublicHeroVisual() {
             density="compact"
             desktopChildren={lanes.map((lane) => (
               <BoardColumn
-                key={lane.status}
+                key={lane.status.id}
                 count={lane.tasks.length}
                 density="compact"
                 description={lane.description}
@@ -149,7 +149,7 @@ export function PublicHeroVisual() {
             ))}
             mobileChildren={lanes.map((lane) => (
               <BoardColumn
-                key={`${lane.status}-mobile`}
+                key={`${lane.status.id}-mobile`}
                 count={lane.tasks.length}
                 density="compact"
                 description={lane.description}

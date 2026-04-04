@@ -1,18 +1,38 @@
 import { describe, expect, it } from "vitest";
-import type { ProjectsListResponse } from "@/contracts/projects";
-import type { TaskCard, TaskGroups } from "@/contracts/tasks";
+import type { ProjectsListResponse, ProjectSummary } from "@/contracts/projects";
+import type { ProjectTaskStatus, TaskCard, TaskStatus } from "@/contracts/tasks";
 import {
   applyTaskStatusChangeToProjectsList,
+  insertStatusIntoTaskStatuses,
   moveTaskToStatus,
 } from "@/features/tasks/lib/task-board";
 
+function createTaskStatus(overrides: Partial<TaskStatus> = {}): TaskStatus {
+  return {
+    id: overrides.id ?? "status-todo",
+    name: overrides.name ?? "Todo",
+    position: overrides.position ?? 1,
+    isClosed: overrides.isClosed ?? false,
+  };
+}
+
 function createTask(overrides: Partial<TaskCard> = {}): TaskCard {
+  const status =
+    overrides.status ??
+    createTaskStatus({
+      id: overrides.statusId ?? "status-todo",
+      name: "Todo",
+      position: 1,
+      isClosed: false,
+    });
+
   return {
     id: overrides.id ?? "task-1",
     projectId: overrides.projectId ?? "project-1",
     title: overrides.title ?? "Task",
     description: overrides.description ?? null,
-    status: overrides.status ?? "TODO",
+    statusId: overrides.statusId ?? status.id,
+    status,
     position: overrides.position ?? 1,
     assigneeId: overrides.assigneeId ?? null,
     dueDate: overrides.dueDate ?? null,
@@ -21,92 +41,224 @@ function createTask(overrides: Partial<TaskCard> = {}): TaskCard {
   };
 }
 
-describe("task-board helpers", () => {
-  it("moves a task between lanes and clears position for v1 kanban moves", () => {
-    const taskGroups: TaskGroups = {
-      TODO: [createTask({ id: "task-todo", status: "TODO", position: 2 })],
-      IN_PROGRESS: [],
-      DONE: [],
-    };
+function createProjectTaskStatus(
+  overrides: Partial<ProjectTaskStatus> = {},
+): ProjectTaskStatus {
+  return {
+    ...createTaskStatus(overrides),
+    tasks: overrides.tasks ?? [],
+  };
+}
 
-    const result = moveTaskToStatus(taskGroups, "task-todo", "DONE");
+function createProjectSummary(
+  overrides: Partial<ProjectSummary> = {},
+): ProjectSummary {
+  return {
+    id: overrides.id ?? "project-1",
+    name: overrides.name ?? "Project one",
+    description: overrides.description ?? null,
+    role: overrides.role ?? "OWNER",
+    statuses: overrides.statuses ?? [],
+  };
+}
+
+describe("task-board helpers", () => {
+  it("moves a task between dynamic statuses and clears position for v1 kanban moves", () => {
+    const todoStatus = createProjectTaskStatus({
+      id: "status-todo",
+      name: "Todo",
+      position: 1,
+      tasks: [
+        createTask({
+          id: "task-todo",
+          statusId: "status-todo",
+          status: createTaskStatus({
+            id: "status-todo",
+            name: "Todo",
+            position: 1,
+          }),
+          position: 2,
+        }),
+      ],
+    });
+    const doneStatus = createProjectTaskStatus({
+      id: "status-done",
+      name: "Done",
+      position: 2,
+      isClosed: true,
+      tasks: [],
+    });
+
+    const result = moveTaskToStatus(
+      [todoStatus, doneStatus],
+      "task-todo",
+      "status-done",
+    );
 
     expect(result.changed).toBe(true);
-    expect(result.previousTask?.status).toBe("TODO");
+    expect(result.previousTask?.statusId).toBe("status-todo");
     expect(result.nextTask).toMatchObject({
       id: "task-todo",
-      status: "DONE",
+      statusId: "status-done",
       position: null,
     });
-    expect(result.nextTaskGroups.TODO).toHaveLength(0);
-    expect(result.nextTaskGroups.DONE).toEqual([
+    expect(result.nextTask?.status).toMatchObject({
+      id: "status-done",
+      name: "Done",
+      isClosed: true,
+    });
+    expect(result.nextStatuses[0]?.tasks).toHaveLength(0);
+    expect(result.nextStatuses[1]?.tasks).toEqual([
       expect.objectContaining({
         id: "task-todo",
-        status: "DONE",
+        statusId: "status-done",
         position: null,
       }),
     ]);
   });
 
-  it("treats same-lane moves as a no-op", () => {
-    const taskGroups: TaskGroups = {
-      TODO: [createTask({ id: "task-todo", status: "TODO" })],
-      IN_PROGRESS: [],
-      DONE: [],
-    };
+  it("treats same-status moves as a no-op", () => {
+    const todoStatus = createProjectTaskStatus({
+      id: "status-todo",
+      name: "Todo",
+      position: 1,
+      tasks: [
+        createTask({
+          id: "task-todo",
+          statusId: "status-todo",
+          status: createTaskStatus({
+            id: "status-todo",
+            name: "Todo",
+            position: 1,
+          }),
+        }),
+      ],
+    });
 
-    const result = moveTaskToStatus(taskGroups, "task-todo", "TODO");
+    const result = moveTaskToStatus([todoStatus], "task-todo", "status-todo");
 
     expect(result.changed).toBe(false);
     expect(result.nextTask).toBeNull();
-    expect(result.nextTaskGroups).toBe(taskGroups);
+    expect(result.nextStatuses).toEqual([todoStatus]);
     expect(result.previousTask).toMatchObject({
       id: "task-todo",
-      status: "TODO",
+      statusId: "status-todo",
     });
   });
 
-  it("updates project counts immutably for optimistic status changes", () => {
+  it("updates project status counts immutably for optimistic status changes", () => {
     const projects: ProjectsListResponse = {
       items: [
-        {
+        createProjectSummary({
           id: "project-1",
-          name: "Project one",
-          description: null,
-          role: "OWNER",
-          taskCounts: {
-            TODO: 2,
-            IN_PROGRESS: 1,
-            DONE: 0,
-          },
-        },
-        {
+          statuses: [
+            {
+              id: "status-todo",
+              name: "Todo",
+              position: 1,
+              isClosed: false,
+              taskCount: 2,
+            },
+            {
+              id: "status-progress",
+              name: "In Progress",
+              position: 2,
+              isClosed: false,
+              taskCount: 1,
+            },
+            {
+              id: "status-done",
+              name: "Done",
+              position: 3,
+              isClosed: true,
+              taskCount: 0,
+            },
+          ],
+        }),
+        createProjectSummary({
           id: "project-2",
           name: "Project two",
-          description: null,
           role: "MEMBER",
-          taskCounts: {
-            TODO: 1,
-            IN_PROGRESS: 0,
-            DONE: 0,
-          },
-        },
+          statuses: [
+            {
+              id: "other-status",
+              name: "Todo",
+              position: 1,
+              isClosed: false,
+              taskCount: 1,
+            },
+          ],
+        }),
       ],
     };
 
     const nextProjects = applyTaskStatusChangeToProjectsList(
       projects,
       "project-1",
-      "TODO",
-      "DONE",
+      "status-todo",
+      "status-done",
     );
 
     expect(nextProjects).not.toBe(projects);
-    expect(nextProjects?.items[0]?.taskCounts).toEqual({
-      TODO: 1,
-      IN_PROGRESS: 1,
-      DONE: 1,
-    });
+    expect(nextProjects?.items[0]?.statuses).toEqual([
+      {
+        id: "status-todo",
+        name: "Todo",
+        position: 1,
+        isClosed: false,
+        taskCount: 1,
+      },
+      {
+        id: "status-progress",
+        name: "In Progress",
+        position: 2,
+        isClosed: false,
+        taskCount: 1,
+      },
+      {
+        id: "status-done",
+        name: "Done",
+        position: 3,
+        isClosed: true,
+        taskCount: 1,
+      },
+    ]);
     expect(nextProjects?.items[1]).toEqual(projects.items[1]);
+  });
+
+  it("inserts a newly created dynamic status in board order", () => {
+    const statuses = [
+      createProjectTaskStatus({
+        id: "status-todo",
+        name: "Todo",
+        position: 1,
+      }),
+      createProjectTaskStatus({
+        id: "status-done",
+        name: "Done",
+        position: 3,
+        isClosed: true,
+      }),
+    ];
+
+    const nextStatuses = insertStatusIntoTaskStatuses(statuses, {
+      id: "status-review",
+      name: "Review",
+      position: 2,
+      isClosed: false,
+      taskCount: 0,
+    });
+
+    expect(nextStatuses.map((status) => status.name)).toEqual([
+      "Todo",
+      "Review",
+      "Done",
+    ]);
+    expect(nextStatuses[1]).toMatchObject({
+      id: "status-review",
+      isClosed: false,
+      position: 2,
+      tasks: [],
+    });
   });
 });

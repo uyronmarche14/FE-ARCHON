@@ -1,4 +1,4 @@
-import type { TaskLogValue, TaskStatus } from "@/contracts/tasks";
+import type { TaskLogValue } from "@/contracts/tasks";
 
 export function getTaskActivityEventLabel(eventType: string) {
   if (eventType === "TASK_UPDATED") {
@@ -34,7 +34,7 @@ export function getTaskActivityFieldLabel(fieldName: string) {
 
 export function formatTaskActivityValue(fieldName: string, value: TaskLogValue) {
   if (fieldName === "status" && typeof value === "string") {
-    return formatTaskStatusLabel(value as TaskStatus);
+    return formatTaskStatusLabel(value);
   }
 
   if (fieldName === "dueDate") {
@@ -75,16 +75,17 @@ export function formatTaskActivityDate(value: string) {
   }).format(new Date(`${value}T00:00:00.000Z`));
 }
 
-export function formatTaskStatusLabel(status: TaskStatus) {
-  if (status === "IN_PROGRESS") {
-    return "In progress";
+export function formatTaskStatusLabel(status: unknown) {
+  if (typeof status !== "string") {
+    return "Unknown";
   }
 
-  if (status === "DONE") {
-    return "Done";
-  }
+  const normalizedStatus =
+    status === status.toUpperCase() ? status.toLowerCase() : status;
 
-  return "Todo";
+  return normalizedStatus
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function isTaskLogAssigneeValue(value: TaskLogValue): value is {

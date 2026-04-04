@@ -23,7 +23,7 @@ export function DraggableTaskCard({
     useDraggable({
       id: task.id,
       data: {
-        status: task.status,
+        statusId: task.statusId,
         taskId: task.id,
       },
     });

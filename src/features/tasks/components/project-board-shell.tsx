@@ -19,7 +19,10 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import type { ProjectsListResponse } from "@/contracts/projects";
+import type {
+  ProjectStatusResponse,
+  ProjectsListResponse,
+} from "@/contracts/projects";
 import type {
   CreateTaskRequest,
   ProjectTasksResponse,
@@ -37,6 +40,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CreateProjectStatusDialog } from "@/features/projects/components/create-project-status-dialog";
 import { InviteMemberDialog } from "@/features/projects/components/invite-member-dialog";
 import { getLaneDotClassName } from "@/features/tasks/components/board-column";
 import { BoardContainer } from "@/features/tasks/components/board-container";
@@ -56,6 +60,9 @@ import { useProjectTasks } from "@/features/tasks/hooks/use-project-tasks";
 import { useUpdateTask } from "@/features/tasks/hooks/use-update-task";
 import { useUpdateTaskStatus } from "@/features/tasks/hooks/use-update-task-status";
 import {
+  applyCreatedStatusToProjectSummary,
+  applyCreatedTaskToProjectSummary,
+  applyDeletedTaskToProjectSummary,
   applyTaskStatusChangeToProjectsList,
   type BoardTaskAssigneeFilter,
   type BoardTaskDueDateFilter,
@@ -64,17 +71,17 @@ import {
   createBoardFilters,
   createBoardLanes,
   createBoardMetrics,
-  createEmptyTaskGroups,
+  createEmptyTaskStatuses,
   createTaskMemberLookup,
-  filterAndSortTaskGroups,
-  flattenTaskGroups,
+  filterAndSortTaskStatuses,
+  flattenTaskStatuses,
   getBoardProjectDescription,
   getBoardProjectName,
-  insertTaskIntoGroups,
+  insertStatusIntoTaskStatuses,
+  insertTaskIntoStatuses,
   moveTaskToStatus,
-  removeTaskFromGroups,
-  TASK_STATUSES,
-  updateTaskInGroups,
+  removeTaskFromStatuses,
+  updateTaskInStatuses,
 } from "@/features/tasks/lib/task-board";
 import {
   projectTasksQueryKey,
@@ -90,12 +97,12 @@ type ProjectBoardShellProps = {
 type TaskDrawerState =
   | {
       mode: "create";
-      initialStatus: TaskStatus;
+      initialStatusId: string;
       taskId: null;
     }
   | {
       mode: "edit" | "view";
-      initialStatus: TaskStatus;
+      initialStatusId: string;
       taskId: string;
     };
 
@@ -128,34 +135,32 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     projectsQuery.data?.items.find((project) => project.id === projectId) ?? null;
   const projectName = getBoardProjectName(projectId, currentProject);
   const projectDescription = getBoardProjectDescription(currentProject);
-  const taskGroups = tasksQuery.data?.taskGroups ?? createEmptyTaskGroups();
-  const allTasks = useMemo(() => flattenTaskGroups(taskGroups), [taskGroups]);
-  const visibleTaskGroups = useMemo(
+  const statuses = tasksQuery.data?.statuses ?? createEmptyTaskStatuses();
+  const firstStatusId = statuses[0]?.id ?? "";
+  const allTasks = useMemo(() => flattenTaskStatuses(statuses), [statuses]);
+  const visibleStatuses = useMemo(
     () =>
-      filterAndSortTaskGroups(taskGroups, {
+      filterAndSortTaskStatuses(statuses, {
         searchQuery,
         assigneeFilter,
         dueDateFilter,
         sortOrder,
       }),
-    [assigneeFilter, dueDateFilter, searchQuery, sortOrder, taskGroups],
+    [assigneeFilter, dueDateFilter, searchQuery, sortOrder, statuses],
   );
   const visibleTasks = useMemo(
-    () => flattenTaskGroups(visibleTaskGroups),
-    [visibleTaskGroups],
+    () => flattenTaskStatuses(visibleStatuses),
+    [visibleStatuses],
   );
-  const lanes = useMemo(() => createBoardLanes(visibleTaskGroups), [visibleTaskGroups]);
-  const metrics = useMemo(
-    () => createBoardMetrics(visibleTaskGroups),
-    [visibleTaskGroups],
-  );
+  const lanes = useMemo(() => createBoardLanes(visibleStatuses), [visibleStatuses]);
+  const metrics = useMemo(() => createBoardMetrics(visibleStatuses), [visibleStatuses]);
   const boardFilters = useMemo(
-    () => createBoardFilters(visibleTaskGroups),
-    [visibleTaskGroups],
+    () => createBoardFilters(visibleStatuses),
+    [visibleStatuses],
   );
   const assigneeOptions = useMemo(
-    () => createAssigneeFilterOptions(taskGroups, membersQuery.data ?? []),
-    [membersQuery.data, taskGroups],
+    () => createAssigneeFilterOptions(statuses, membersQuery.data ?? []),
+    [membersQuery.data, statuses],
   );
   const memberLookup = useMemo(
     () => createTaskMemberLookup(membersQuery.data ?? []),
@@ -166,10 +171,10 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
       ? allTasks.find((task) => task.id === drawerState.taskId) ?? null
       : null;
   const drawerMode = drawerState?.mode ?? "view";
-  const drawerInitialStatus =
+  const drawerInitialStatusId =
     drawerState?.mode === "create"
-      ? drawerState.initialStatus
-      : selectedTask?.status ?? "TODO";
+      ? drawerState.initialStatusId
+      : selectedTask?.statusId ?? firstStatusId;
   const isDrawerOpen =
     drawerState !== null &&
     (drawerState.mode === "create" || selectedTask !== null);
@@ -177,7 +182,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     drawerState === null
       ? "closed"
       : drawerState.mode === "create"
-        ? `create:${drawerState.initialStatus}`
+        ? `create:${drawerState.initialStatusId}`
         : drawerState.mode === "view"
           ? `view:${drawerState.taskId}`
           : `edit:${drawerState.taskId}:${selectedTask?.updatedAt ?? "missing"}`;
@@ -186,6 +191,8 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
       ? allTasks.find((task) => task.id === activeDragTaskId) ?? null
       : null;
   const canInviteMembers =
+    currentProject?.role === "OWNER" || session?.user.role === "ADMIN";
+  const canManageStatuses =
     currentProject?.role === "OWNER" || session?.user.role === "ADMIN";
   const isTaskMutationPending =
     createTaskMutation.isPending ||
@@ -222,8 +229,8 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     queryClient.setQueryData<ProjectTasksResponse>(
       projectTasksQueryKey(projectId),
       (currentTaskResponse) => ({
-        taskGroups: insertTaskIntoGroups(
-          currentTaskResponse?.taskGroups ?? createEmptyTaskGroups(),
+        statuses: insertTaskIntoStatuses(
+          currentTaskResponse?.statuses ?? createEmptyTaskStatuses(),
           createdTask,
         ),
       }),
@@ -235,13 +242,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
           ? {
               items: currentProjects.items.map((project) =>
                 project.id === projectId
-                  ? {
-                      ...project,
-                      taskCounts: {
-                        ...project.taskCounts,
-                        [createdTask.status]: project.taskCounts[createdTask.status] + 1,
-                      },
-                    }
+                  ? applyCreatedTaskToProjectSummary(project, createdTask.statusId)
                   : project,
               ),
             }
@@ -271,8 +272,8 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     queryClient.setQueryData<ProjectTasksResponse>(
       projectTasksQueryKey(projectId),
       (currentTaskResponse) => ({
-        taskGroups: updateTaskInGroups(
-          currentTaskResponse?.taskGroups ?? createEmptyTaskGroups(),
+        statuses: updateTaskInStatuses(
+          currentTaskResponse?.statuses ?? createEmptyTaskStatuses(),
           updatedTask,
         ),
       }),
@@ -281,18 +282,59 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     setDrawerState({
       mode: "view",
       taskId: updatedTask.id,
-      initialStatus: updatedTask.status,
+      initialStatusId: updatedTask.statusId,
     });
     showSuccessToast("Task updated", "Changes were saved without leaving the board.");
 
     void queryClient.invalidateQueries({
       queryKey: projectTasksQueryKey(projectId),
     });
-    void queryClient.invalidateQueries({
+    await queryClient.invalidateQueries({
       queryKey: taskLogsQueryKey(updatedTask.id),
+      refetchType: "active",
     });
     void queryClient.invalidateQueries({
       queryKey: ["project", projectId, "activity"],
+    });
+  }
+
+  function handleProjectStatusCreated(createdStatus: ProjectStatusResponse) {
+    queryClient.setQueryData<ProjectTasksResponse>(
+      projectTasksQueryKey(projectId),
+      (currentTaskResponse) => ({
+        statuses: insertStatusIntoTaskStatuses(
+          currentTaskResponse?.statuses ?? createEmptyTaskStatuses(),
+          createdStatus,
+        ),
+      }),
+    );
+    queryClient.setQueryData<ProjectsListResponse>(
+      projectsQueryKey,
+      (currentProjects) =>
+        currentProjects
+          ? {
+              items: currentProjects.items.map((project) =>
+                project.id === projectId
+                  ? applyCreatedStatusToProjectSummary(project, createdStatus)
+                  : project,
+              ),
+            }
+          : currentProjects,
+    );
+
+    showSuccessToast(
+      "Status created",
+      `${createdStatus.name} is ready to use on this project board.`,
+    );
+
+    void queryClient.invalidateQueries({
+      queryKey: projectTasksQueryKey(projectId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: projectsQueryKey,
+    });
+    void queryClient.invalidateQueries({
+      queryKey: projectDetailQueryKey(projectId),
     });
   }
 
@@ -302,8 +344,8 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     queryClient.setQueryData<ProjectTasksResponse>(
       projectTasksQueryKey(projectId),
       (currentTaskResponse) => ({
-        taskGroups: removeTaskFromGroups(
-          currentTaskResponse?.taskGroups ?? createEmptyTaskGroups(),
+        statuses: removeTaskFromStatuses(
+          currentTaskResponse?.statuses ?? createEmptyTaskStatuses(),
           task.id,
         ),
       }),
@@ -315,13 +357,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
           ? {
               items: currentProjects.items.map((project) =>
                 project.id === projectId
-                  ? {
-                      ...project,
-                      taskCounts: {
-                        ...project.taskCounts,
-                        [task.status]: Math.max(0, project.taskCounts[task.status] - 1),
-                      },
-                    }
+                  ? applyDeletedTaskToProjectSummary(project, task.statusId)
                   : project,
               ),
             }
@@ -342,10 +378,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     });
   }
 
-  async function handleTaskStatusMove(
-    taskId: string,
-    targetStatus: TaskStatus,
-  ) {
+  async function handleTaskStatusMove(taskId: string, targetStatusId: string) {
     await Promise.all([
       queryClient.cancelQueries({
         queryKey: projectTasksQueryKey(projectId),
@@ -364,9 +397,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     }
 
     const moveResult = moveTaskToStatus(
-      currentTaskResponse.taskGroups,
+      currentTaskResponse.statuses,
       taskId,
-      targetStatus,
+      targetStatusId,
     );
 
     if (!moveResult.changed || !moveResult.previousTask || !moveResult.nextTask) {
@@ -380,7 +413,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
     queryClient.setQueryData<ProjectTasksResponse>(
       projectTasksQueryKey(projectId),
       {
-        taskGroups: moveResult.nextTaskGroups,
+        statuses: moveResult.nextStatuses,
       },
     );
     queryClient.setQueryData<ProjectsListResponse | undefined>(
@@ -389,8 +422,8 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
         applyTaskStatusChangeToProjectsList(
           currentProjects,
           projectId,
-          moveResult.previousTask.status,
-          targetStatus,
+          moveResult.previousTask.statusId,
+          targetStatusId,
         ),
     );
 
@@ -398,15 +431,15 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
       const updatedTask = await updateTaskStatusMutation.mutateAsync({
         taskId,
         request: {
-          status: targetStatus,
+          statusId: targetStatusId,
         } satisfies UpdateTaskStatusRequest,
       });
 
       queryClient.setQueryData<ProjectTasksResponse>(
         projectTasksQueryKey(projectId),
         (latestTaskResponse) => ({
-          taskGroups: updateTaskInGroups(
-            latestTaskResponse?.taskGroups ?? moveResult.nextTaskGroups,
+          statuses: updateTaskInStatuses(
+            latestTaskResponse?.statuses ?? moveResult.nextStatuses,
             updatedTask,
           ),
         }),
@@ -418,8 +451,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
       void queryClient.invalidateQueries({
         queryKey: projectDetailQueryKey(projectId),
       });
-      void queryClient.invalidateQueries({
+      await queryClient.invalidateQueries({
         queryKey: taskLogsQueryKey(taskId),
+        refetchType: "active",
       });
       void queryClient.invalidateQueries({
         queryKey: ["project", projectId, "activity"],
@@ -453,46 +487,50 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
 
   function handleDragEnd(event: DragEndEvent) {
     const taskId = typeof event.active.id === "string" ? event.active.id : null;
-    const targetStatus =
-      typeof event.over?.id === "string" &&
-      TASK_STATUSES.includes(event.over.id as TaskStatus)
-        ? (event.over.id as TaskStatus)
+    const overId = typeof event.over?.id === "string" ? event.over.id : null;
+    const targetStatusId =
+      overId !== null && statuses.some((status) => status.id === overId)
+        ? overId
         : null;
 
     setActiveDragTaskId(null);
 
-    if (!taskId || !targetStatus) {
+    if (!taskId || !targetStatusId) {
       return;
     }
 
     const currentTask = allTasks.find((task) => task.id === taskId);
 
-    if (!currentTask || currentTask.status === targetStatus) {
+    if (!currentTask || currentTask.statusId === targetStatusId) {
       return;
     }
 
-    void handleTaskStatusMove(taskId, targetStatus);
+    void handleTaskStatusMove(taskId, targetStatusId);
   }
 
   function openTask(task: TaskCard) {
     setDrawerState({
       mode: "view",
       taskId: task.id,
-      initialStatus: task.status,
+      initialStatusId: task.statusId,
     });
   }
 
-  function openCreateTask(status: TaskStatus) {
+  function openCreateTask(statusId: string) {
+    if (!statusId) {
+      return;
+    }
+
     setDrawerState({
       mode: "create",
       taskId: null,
-      initialStatus: status,
+      initialStatusId: statusId,
     });
   }
 
   const desktopBoardLanes = lanes.map((lane) => (
     <KanbanBoardLane
-      key={`desktop:${lane.status}`}
+      key={`desktop:${lane.status.id}`}
       lane={lane}
       memberLookup={memberLookup}
       onAddTask={openCreateTask}
@@ -503,7 +541,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
 
   const mobileBoardLanes = lanes.map((lane) => (
     <KanbanBoardLane
-      key={`mobile:${lane.status}`}
+      key={`mobile:${lane.status.id}`}
       lane={lane}
       memberLookup={memberLookup}
       onAddTask={openCreateTask}
@@ -539,11 +577,18 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
 
             <div className="flex flex-wrap gap-2">
               {canInviteMembers ? <InviteMemberDialog projectId={projectId} /> : null}
+              {canManageStatuses ? (
+                <CreateProjectStatusDialog
+                  projectId={projectId}
+                  onCreated={handleProjectStatusCreated}
+                />
+              ) : null}
               <Button
                 type="button"
                 size="sm"
                 className="rounded-xl"
-                onClick={() => openCreateTask("TODO")}
+                onClick={() => openCreateTask(firstStatusId)}
+                disabled={!firstStatusId}
               >
                 <Plus className="size-4" />
                 Create task
@@ -590,7 +635,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
             <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
           <Badge variant="muted" size="xs">
-            {activeSurfaceTab === "board" ? `${visibleTasks.length} visible` : "Project-wide history"}
+            {activeSurfaceTab === "board"
+              ? `${visibleTasks.length} visible`
+              : "Project-wide history"}
           </Badge>
         </div>
 
@@ -621,7 +668,9 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
                 >
                   {assigneeOptions.map((option) => (
                     <option key={option.value} value={option.value}>
-                      {"count" in option ? `${option.label} (${option.count})` : option.label}
+                      {"count" in option
+                        ? `${option.label} (${option.count})`
+                        : option.label}
                     </option>
                   ))}
                 </Select>
@@ -651,7 +700,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
                 size="xs"
                 className="justify-center rounded-[0.95rem] px-3 py-2"
               >
-                Grouped by lane
+                Grouped by status
               </Badge>
               <div className="rounded-[0.95rem] border border-border/70 bg-background/90 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                 <Select
@@ -741,7 +790,13 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
         memberLookup={memberLookup}
         projectId={projectId}
         task={selectedTask}
-        initialStatus={drawerInitialStatus}
+        statuses={statuses.map((status) => ({
+          id: status.id,
+          name: status.name,
+          position: status.position,
+          isClosed: status.isClosed,
+        }))}
+        initialStatusId={drawerInitialStatusId}
         isCreatePending={createTaskMutation.isPending}
         isUpdatePending={updateTaskMutation.isPending}
         isDeletePending={deleteTaskMutation.isPending}
@@ -758,7 +813,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
           setDrawerState({
             mode,
             taskId: selectedTask.id,
-            initialStatus: selectedTask.status,
+            initialStatusId: selectedTask.statusId,
           });
         }}
         onCreate={handleCreateTask}
@@ -803,7 +858,7 @@ export function ProjectBoardLoadingState({
 
       <div className="flex gap-4 overflow-hidden">
         <BoardLaneSkeleton title="Todo" />
-        <BoardLaneSkeleton title="In progress" />
+        <BoardLaneSkeleton title="In Progress" />
         <BoardLaneSkeleton title="Done" />
       </div>
     </section>
@@ -848,7 +903,7 @@ function ProjectBoardErrorState({
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Try the request again to reload the grouped tasks for this project.
+            Try the request again to reload the ordered statuses and tasks for this project.
           </p>
           <Button type="button" onClick={onRetry} className="rounded-md">
             Retry loading tasks
@@ -864,7 +919,12 @@ function BoardLaneSkeleton({ title }: { title: string }) {
     <section className="w-[21.75rem] shrink-0 overflow-hidden rounded-[1.2rem] border border-border/70 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <header className="border-b border-border/60 px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className={cn("size-2.5 rounded-full", getLaneDotClassName(getLaneStatus(title)))} />
+          <span
+            className={cn(
+              "size-2.5 rounded-full",
+              getLaneDotClassName(getSkeletonLaneStatus(title)),
+            )}
+          />
           <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
         </div>
       </header>
@@ -876,14 +936,11 @@ function BoardLaneSkeleton({ title }: { title: string }) {
   );
 }
 
-function getLaneStatus(title: string): TaskStatus {
-  if (title === "In progress") {
-    return "IN_PROGRESS";
-  }
-
-  if (title === "Done") {
-    return "DONE";
-  }
-
-  return "TODO";
+function getSkeletonLaneStatus(title: string): TaskStatus {
+  return {
+    id: `skeleton-${title.toLowerCase().replace(/\s+/g, "-")}`,
+    name: title,
+    position: title === "Done" ? 3 : title === "In Progress" ? 2 : 1,
+    isClosed: title === "Done",
+  };
 }

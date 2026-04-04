@@ -1,4 +1,7 @@
-import type { ProjectSummary, ProjectTaskCounts } from "@/contracts/projects";
+import type {
+  ProjectStatusSummary,
+  ProjectSummary,
+} from "@/contracts/projects";
 
 export function getProjectInitials(name: string) {
   const segments = name
@@ -14,52 +17,51 @@ export function getProjectInitials(name: string) {
   return segments.map((segment) => segment[0]?.toUpperCase() ?? "").join("");
 }
 
-export function getProjectTotalTaskCount(taskCounts: ProjectTaskCounts) {
-  return taskCounts.TODO + taskCounts.IN_PROGRESS + taskCounts.DONE;
+export function getProjectTotalTaskCount(statuses: ProjectStatusSummary[]) {
+  return statuses.reduce((total, status) => total + status.taskCount, 0);
 }
 
-export function getProjectOpenTaskCount(taskCounts: ProjectTaskCounts) {
-  return taskCounts.TODO + taskCounts.IN_PROGRESS;
+export function getProjectOpenTaskCount(statuses: ProjectStatusSummary[]) {
+  return statuses.reduce(
+    (total, status) => total + (status.isClosed ? 0 : status.taskCount),
+    0,
+  );
 }
 
-export function getProjectProgressSegments(taskCounts: ProjectTaskCounts) {
-  const total = getProjectTotalTaskCount(taskCounts);
+export function getProjectProgressSegments(statuses: ProjectStatusSummary[]) {
+  const total = getProjectTotalTaskCount(statuses);
 
   if (total === 0) {
     return [];
   }
 
-  return [
-    {
-      status: "TODO" as const,
-      count: taskCounts.TODO,
-      width: (taskCounts.TODO / total) * 100,
-    },
-    {
-      status: "IN_PROGRESS" as const,
-      count: taskCounts.IN_PROGRESS,
-      width: (taskCounts.IN_PROGRESS / total) * 100,
-    },
-    {
-      status: "DONE" as const,
-      count: taskCounts.DONE,
-      width: (taskCounts.DONE / total) * 100,
-    },
-  ].filter((segment) => segment.count > 0);
+  return statuses
+    .filter((status) => status.taskCount > 0)
+    .sort((left, right) => left.position - right.position)
+    .map((status) => ({
+      id: status.id,
+      name: status.name,
+      count: status.taskCount,
+      isClosed: status.isClosed,
+      width: (status.taskCount / total) * 100,
+    }));
 }
 
-export function getProjectDoneCount(taskCounts: ProjectTaskCounts) {
-  return taskCounts.DONE;
+export function getProjectDoneCount(statuses: ProjectStatusSummary[]) {
+  return statuses.reduce(
+    (total, status) => total + (status.isClosed ? status.taskCount : 0),
+    0,
+  );
 }
 
-export function getProjectCompletionPercentage(taskCounts: ProjectTaskCounts) {
-  const totalTasks = getProjectTotalTaskCount(taskCounts);
+export function getProjectCompletionPercentage(statuses: ProjectStatusSummary[]) {
+  const totalTasks = getProjectTotalTaskCount(statuses);
 
   if (totalTasks === 0) {
     return 0;
   }
 
-  return Math.round((taskCounts.DONE / totalTasks) * 100);
+  return Math.round((getProjectDoneCount(statuses) / totalTasks) * 100);
 }
 
 export function sortProjectsByName(projects: ProjectSummary[]) {

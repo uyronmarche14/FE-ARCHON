@@ -3,6 +3,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { MoreHorizontal, Plus } from "lucide-react";
 import type { TaskStatus } from "@/contracts/tasks";
 import { Button } from "@/components/ui/button";
+import { getTaskStatusTone } from "@/features/tasks/lib/task-board";
 import { cn } from "@/lib/utils";
 
 type BoardColumnProps = {
@@ -184,11 +185,13 @@ export function BoardLaneEmptyState({ lane }: { lane: string }) {
 }
 
 export function getLaneDotClassName(status: TaskStatus) {
-  if (status === "IN_PROGRESS") {
+  const tone = getTaskStatusTone(status);
+
+  if (tone === "progress") {
     return "bg-in-progress";
   }
 
-  if (status === "DONE") {
+  if (tone === "done") {
     return "bg-done";
   }
 

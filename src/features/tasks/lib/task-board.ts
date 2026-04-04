@@ -1,9 +1,14 @@
 import type {
   ProjectMember,
   ProjectsListResponse,
+  ProjectStatusSummary,
   ProjectSummary,
 } from "@/contracts/projects";
-import type { TaskCard, TaskGroups, TaskStatus } from "@/contracts/tasks";
+import type {
+  ProjectTaskStatus,
+  TaskCard,
+  TaskStatus,
+} from "@/contracts/tasks";
 
 export type BoardLane = {
   description: string;
@@ -32,58 +37,34 @@ export type BoardTaskSort =
   | "NEWEST_UPDATED"
   | "OLDEST_CREATED";
 
-export const TASK_STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
-
-const BOARD_LANE_CONTENT: Record<
-  TaskStatus,
-  Pick<BoardLane, "description" | "title">
-> = {
-  TODO: {
-    title: "Todo",
-    description: "Queued work prepared for the next execution cycle.",
-  },
-  IN_PROGRESS: {
-    title: "In progress",
-    description: "Work already moving and worth checking first.",
-  },
-  DONE: {
-    title: "Done",
-    description: "Completed work that confirms delivery momentum.",
-  },
-};
-
-export function createEmptyTaskGroups(): TaskGroups {
-  return {
-    TODO: [],
-    IN_PROGRESS: [],
-    DONE: [],
-  };
+export function createEmptyTaskStatuses(): ProjectTaskStatus[] {
+  return [];
 }
 
-export function createBoardLanes(taskGroups: TaskGroups): BoardLane[] {
-  return TASK_STATUSES.map((status) => ({
+export function createBoardLanes(statuses: ProjectTaskStatus[]): BoardLane[] {
+  return statuses.map((status, index) => ({
     status,
-    tasks: taskGroups[status],
-    title: BOARD_LANE_CONTENT[status].title,
-    description: BOARD_LANE_CONTENT[status].description,
+    tasks: status.tasks,
+    title: status.name,
+    description: getBoardStatusDescription(status, index),
   }));
 }
 
-export function filterAndSortTaskGroups(
-  taskGroups: TaskGroups,
+export function filterAndSortTaskStatuses(
+  statuses: ProjectTaskStatus[],
   options: {
     searchQuery: string;
     assigneeFilter: BoardTaskAssigneeFilter;
     dueDateFilter: BoardTaskDueDateFilter;
     sortOrder: BoardTaskSort;
   },
-): TaskGroups {
+): ProjectTaskStatus[] {
   const normalizedSearchQuery = options.searchQuery.trim().toLowerCase();
-  const nextGroups = createEmptyTaskGroups();
 
-  for (const status of TASK_STATUSES) {
-    nextGroups[status] = sortBoardTasks(
-      taskGroups[status].filter((task) => {
+  return statuses.map((status) => ({
+    ...status,
+    tasks: sortBoardTasks(
+      status.tasks.filter((task) => {
         if (
           normalizedSearchQuery.length > 0 &&
           !`${task.title} ${task.description ?? ""}`
@@ -112,17 +93,15 @@ export function filterAndSortTaskGroups(
         return true;
       }),
       options.sortOrder,
-    );
-  }
-
-  return nextGroups;
+    ),
+  }));
 }
 
 export function createAssigneeFilterOptions(
-  taskGroups: TaskGroups,
+  statuses: ProjectTaskStatus[],
   members: Array<{ id: string; name: string }>,
 ) {
-  const allTasks = flattenTaskGroups(taskGroups);
+  const allTasks = flattenTaskStatuses(statuses);
 
   return [
     { label: "All assignees", value: "ALL" as const },
@@ -135,108 +114,128 @@ export function createAssigneeFilterOptions(
   ];
 }
 
-export function flattenTaskGroups(taskGroups: TaskGroups) {
-  return TASK_STATUSES.flatMap((status) => taskGroups[status]);
+export function flattenTaskStatuses(statuses: ProjectTaskStatus[]) {
+  return statuses.flatMap((status) => status.tasks);
 }
 
-export function createBoardMetrics(taskGroups: TaskGroups): BoardMetric[] {
-  const totalTasks = getTotalTaskCount(taskGroups);
-  const inProgressCount = taskGroups.IN_PROGRESS.length;
-  const doneCount = taskGroups.DONE.length;
+export function createBoardMetrics(statuses: ProjectTaskStatus[]): BoardMetric[] {
+  const totalTasks = getTotalTaskCount(statuses);
+  const openTasks = statuses.reduce(
+    (total, status) => total + (status.isClosed ? 0 : status.tasks.length),
+    0,
+  );
+  const completedTasks = statuses.reduce(
+    (total, status) => total + (status.isClosed ? status.tasks.length : 0),
+    0,
+  );
 
   return [
     { label: "Tracked tasks", value: String(totalTasks) },
-    { label: "Active lane cards", value: String(inProgressCount) },
-    { label: "Completed", value: String(doneCount) },
+    { label: "Open tasks", value: String(openTasks) },
+    { label: "Completed", value: String(completedTasks) },
   ];
 }
 
-export function createBoardFilters(taskGroups: TaskGroups) {
+export function createBoardFilters(statuses: ProjectTaskStatus[]) {
   return [
-    { label: "All work", value: getTotalTaskCount(taskGroups), active: true },
-    { label: "Todo", value: taskGroups.TODO.length },
-    { label: "Active", value: taskGroups.IN_PROGRESS.length },
-    { label: "Completed", value: taskGroups.DONE.length },
+    { label: "All work", value: getTotalTaskCount(statuses), active: true },
+    ...statuses.map((status) => ({
+      label: status.name,
+      value: status.tasks.length,
+      active: false,
+    })),
   ];
 }
 
-export function insertTaskIntoGroups(
-  taskGroups: TaskGroups,
+export function insertTaskIntoStatuses(
+  statuses: ProjectTaskStatus[],
   task: TaskCard,
-): TaskGroups {
-  const nextGroups = cloneTaskGroups(taskGroups);
-  nextGroups[task.status] = sortBoardTasks([...nextGroups[task.status], task]);
-
-  return nextGroups;
+): ProjectTaskStatus[] {
+  return statuses.map((status) =>
+    status.id === task.statusId
+      ? {
+          ...status,
+          tasks: sortBoardTasks([...status.tasks, task]),
+        }
+      : status,
+  );
 }
 
-export function updateTaskInGroups(
-  taskGroups: TaskGroups,
+export function updateTaskInStatuses(
+  statuses: ProjectTaskStatus[],
   task: TaskCard,
-): TaskGroups {
-  const nextGroups = createEmptyTaskGroups();
+): ProjectTaskStatus[] {
+  return statuses.map((status) => {
+    const remainingTasks = status.tasks.filter((laneTask) => laneTask.id !== task.id);
 
-  for (const status of TASK_STATUSES) {
-    const laneTasks = taskGroups[status].filter((laneTask) => laneTask.id !== task.id);
+    if (status.id === task.statusId) {
+      return {
+        ...status,
+        tasks: sortBoardTasks([...remainingTasks, task]),
+      };
+    }
 
-    nextGroups[status] = laneTasks;
-  }
-
-  nextGroups[task.status] = sortBoardTasks([...nextGroups[task.status], task]);
-
-  return nextGroups;
+    return {
+      ...status,
+      tasks: remainingTasks,
+    };
+  });
 }
 
 export function moveTaskToStatus(
-  taskGroups: TaskGroups,
+  statuses: ProjectTaskStatus[],
   taskId: string,
-  nextStatus: TaskStatus,
+  nextStatusId: string,
 ) {
-  const previousTask = flattenTaskGroups(taskGroups).find((task) => task.id === taskId);
+  const previousTask = flattenTaskStatuses(statuses).find((task) => task.id === taskId);
+  const nextStatus = statuses.find((status) => status.id === nextStatusId) ?? null;
 
-  if (!previousTask || previousTask.status === nextStatus) {
+  if (!previousTask || !nextStatus || previousTask.statusId === nextStatusId) {
     return {
       changed: false,
       nextTask: null,
-      nextTaskGroups: taskGroups,
+      nextStatuses: statuses,
       previousTask: previousTask ?? null,
     } as const;
   }
 
   const nextTask: TaskCard = {
     ...previousTask,
-    status: nextStatus,
+    statusId: nextStatus.id,
+    status: {
+      id: nextStatus.id,
+      name: nextStatus.name,
+      position: nextStatus.position,
+      isClosed: nextStatus.isClosed,
+    },
     position: null,
   };
 
   return {
     changed: true,
     nextTask,
-    nextTaskGroups: updateTaskInGroups(taskGroups, nextTask),
+    nextStatuses: updateTaskInStatuses(statuses, nextTask),
     previousTask,
   } as const;
 }
 
-export function removeTaskFromGroups(
-  taskGroups: TaskGroups,
+export function removeTaskFromStatuses(
+  statuses: ProjectTaskStatus[],
   taskId: string,
-): TaskGroups {
-  const nextGroups = createEmptyTaskGroups();
-
-  for (const status of TASK_STATUSES) {
-    nextGroups[status] = taskGroups[status].filter((task) => task.id !== taskId);
-  }
-
-  return nextGroups;
+): ProjectTaskStatus[] {
+  return statuses.map((status) => ({
+    ...status,
+    tasks: status.tasks.filter((task) => task.id !== taskId),
+  }));
 }
 
 export function applyTaskStatusChangeToProjectsList(
   projects: ProjectsListResponse | undefined,
   projectId: string,
-  fromStatus: TaskStatus,
-  toStatus: TaskStatus,
+  fromStatusId: string,
+  toStatusId: string,
 ) {
-  if (!projects || fromStatus === toStatus) {
+  if (!projects || fromStatusId === toStatusId) {
     return projects;
   }
 
@@ -245,15 +244,72 @@ export function applyTaskStatusChangeToProjectsList(
       project.id === projectId
         ? {
             ...project,
-            taskCounts: {
-              ...project.taskCounts,
-              [fromStatus]: Math.max(0, project.taskCounts[fromStatus] - 1),
-              [toStatus]: project.taskCounts[toStatus] + 1,
-            },
+            statuses: project.statuses.map((status) => ({
+              ...status,
+              taskCount:
+                status.id === fromStatusId
+                  ? Math.max(0, status.taskCount - 1)
+                  : status.id === toStatusId
+                    ? status.taskCount + 1
+                    : status.taskCount,
+            })),
           }
         : project,
     ),
   } satisfies ProjectsListResponse;
+}
+
+export function applyCreatedTaskToProjectSummary(
+  project: ProjectSummary,
+  taskStatusId: string,
+) {
+  return {
+    ...project,
+    statuses: project.statuses.map((status) =>
+      status.id === taskStatusId
+        ? {
+            ...status,
+            taskCount: status.taskCount + 1,
+          }
+        : status,
+    ),
+  };
+}
+
+export function applyDeletedTaskToProjectSummary(
+  project: ProjectSummary,
+  taskStatusId: string,
+) {
+  return {
+    ...project,
+    statuses: project.statuses.map((status) =>
+      status.id === taskStatusId
+        ? {
+            ...status,
+            taskCount: Math.max(0, status.taskCount - 1),
+          }
+        : status,
+    ),
+  };
+}
+
+export function applyCreatedStatusToProjectSummary(
+  project: ProjectSummary,
+  status: ProjectStatusSummary,
+) {
+  return {
+    ...project,
+    statuses: [...project.statuses, status].sort((left, right) => left.position - right.position),
+  };
+}
+
+export function insertStatusIntoTaskStatuses(
+  statuses: ProjectTaskStatus[],
+  status: ProjectStatusSummary,
+): ProjectTaskStatus[] {
+  return [...statuses, { ...status, tasks: [] }].sort(
+    (left, right) => left.position - right.position,
+  );
 }
 
 export function getBoardProjectName(
@@ -313,7 +369,7 @@ export function getTaskUpdatedLabel(updatedAt: string) {
   return `Updated ${formatBoardDate(updatedAt)}`;
 }
 
-export function getTaskPositionLabel(position: number | null, status: TaskStatus) {
+export function getTaskPositionLabel(position: number | null, status: TaskStatus | string) {
   if (position === null) {
     return `No fixed order in ${formatTaskStatusLabel(status)}.`;
   }
@@ -329,24 +385,48 @@ export function getTaskPositionSummaryLabel(position: number | null) {
   return `#${position}`;
 }
 
-export function formatTaskStatusLabel(status: TaskStatus) {
-  if (status === "IN_PROGRESS") {
-    return "In progress";
+export function formatTaskStatusLabel(status: TaskStatus | string) {
+  if (typeof status === "string") {
+    const normalizedStatus =
+      status === status.toUpperCase() ? status.toLowerCase() : status;
+
+    return normalizedStatus
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (character) => character.toUpperCase());
   }
 
-  if (status === "DONE") {
-    return "Done";
-  }
-
-  return "Todo";
+  return status.name;
 }
 
-function cloneTaskGroups(taskGroups: TaskGroups) {
-  return {
-    TODO: [...taskGroups.TODO],
-    IN_PROGRESS: [...taskGroups.IN_PROGRESS],
-    DONE: [...taskGroups.DONE],
-  };
+export function getTaskStatusTone(status: TaskStatus) {
+  if (status.isClosed) {
+    return "done" as const;
+  }
+
+  const normalizedName = status.name.trim().toLowerCase();
+
+  if (
+    normalizedName.includes("progress") ||
+    normalizedName.includes("doing") ||
+    normalizedName.includes("active") ||
+    normalizedName.includes("review")
+  ) {
+    return "progress" as const;
+  }
+
+  return "todo" as const;
+}
+
+function getBoardStatusDescription(status: TaskStatus, index: number) {
+  if (status.isClosed) {
+    return "Completed work captured for handoff, review, and reference.";
+  }
+
+  if (index === 0) {
+    return "Queued work prepared for the next execution cycle.";
+  }
+
+  return "Work currently moving through this workflow stage.";
 }
 
 function createInitialsFromName(name: string) {
@@ -414,45 +494,19 @@ function sortBoardTasks(tasks: TaskCard[], sortOrder: BoardTaskSort = "DEFAULT")
   });
 }
 
-function getTotalTaskCount(taskGroups: TaskGroups) {
-  return (
-    taskGroups.TODO.length +
-    taskGroups.IN_PROGRESS.length +
-    taskGroups.DONE.length
-  );
-}
-
-function humanizeProjectSlug(projectId: string) {
-  return projectId
-    .split("-")
-    .filter(Boolean)
-    .map((segment) => segment[0]?.toUpperCase() + segment.slice(1))
-    .join(" ");
-}
-
-function formatBoardDate(value: string) {
-  const parsedDate = new Date(value);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(parsedDate);
+function getTotalTaskCount(statuses: ProjectTaskStatus[]) {
+  return statuses.reduce((total, status) => total + status.tasks.length, 0);
 }
 
 function matchesDueDateFilter(
   dueDate: string | null,
-  filter: BoardTaskDueDateFilter,
+  dueDateFilter: BoardTaskDueDateFilter,
 ) {
-  if (filter === "ALL") {
+  if (dueDateFilter === "ALL") {
     return true;
   }
 
-  if (filter === "NO_DUE_DATE") {
+  if (dueDateFilter === "NO_DUE_DATE") {
     return dueDate === null;
   }
 
@@ -460,23 +514,32 @@ function matchesDueDateFilter(
     return false;
   }
 
-  const taskDueDate = new Date(`${dueDate}T00:00:00.000Z`);
-  const now = new Date();
-  const today = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-  const sevenDaysFromToday = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const dueDateValue = new Date(`${dueDate}T00:00:00.000Z`).getTime();
+  const now = Date.now();
+  const sevenDaysFromNow = now + 7 * 24 * 60 * 60 * 1000;
 
-  if (filter === "OVERDUE") {
-    return taskDueDate.getTime() < today.getTime();
+  if (dueDateFilter === "OVERDUE") {
+    return dueDateValue < now;
   }
 
-  if (filter === "NEXT_7_DAYS") {
-    return (
-      taskDueDate.getTime() >= today.getTime() &&
-      taskDueDate.getTime() <= sevenDaysFromToday.getTime()
-    );
+  if (dueDateFilter === "NEXT_7_DAYS") {
+    return dueDateValue >= now && dueDateValue <= sevenDaysFromNow;
   }
 
-  return taskDueDate.getTime() > sevenDaysFromToday.getTime();
+  return dueDateValue > sevenDaysFromNow;
+}
+
+function formatBoardDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+    year: value.includes("T") ? undefined : "numeric",
+  }).format(new Date(value.includes("T") ? value : `${value}T00:00:00.000Z`));
+}
+
+function humanizeProjectSlug(projectId: string) {
+  return projectId
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }

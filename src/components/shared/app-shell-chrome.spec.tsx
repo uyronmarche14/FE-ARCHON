@@ -102,28 +102,18 @@ describe("AppShellChrome", () => {
     projectsHookState.useProjects.mockReturnValue({
       data: {
         items: [
-          {
-            id: "launch-planning",
-            name: "Launch planning",
+          createProjectSummary("launch-planning", "Launch planning", {
+            todo: 4,
+            inProgress: 2,
+            done: 5,
             description: "Coordinate the release work across the team.",
-            role: "OWNER",
-            taskCounts: {
-              TODO: 4,
-              IN_PROGRESS: 2,
-              DONE: 5,
-            },
-          },
-          {
-            id: "qa-readiness",
-            name: "QA readiness",
+          }),
+          createProjectSummary("qa-readiness", "QA readiness", {
+            todo: 0,
+            inProgress: 0,
+            done: 0,
             description: "Track validation and smoke checks.",
-            role: "OWNER",
-            taskCounts: {
-              TODO: 0,
-              IN_PROGRESS: 0,
-              DONE: 0,
-            },
-          },
+          }),
         ],
       },
       isPending: false,
@@ -160,3 +150,45 @@ describe("AppShellChrome", () => {
     expect(screen.queryByText("Launch planning")).not.toBeInTheDocument();
   });
 });
+
+function createProjectSummary(
+  id: string,
+  name: string,
+  options: {
+    description?: string | null;
+    done: number;
+    inProgress: number;
+    role?: "OWNER" | "MEMBER";
+    todo: number;
+  },
+) {
+  return {
+    id,
+    name,
+    description: options.description ?? null,
+    role: options.role ?? "OWNER",
+    statuses: [
+      {
+        id: `${id}-status-todo`,
+        name: "Todo",
+        position: 1,
+        isClosed: false,
+        taskCount: options.todo,
+      },
+      {
+        id: `${id}-status-progress`,
+        name: "In Progress",
+        position: 2,
+        isClosed: false,
+        taskCount: options.inProgress,
+      },
+      {
+        id: `${id}-status-done`,
+        name: "Done",
+        position: 3,
+        isClosed: true,
+        taskCount: options.done,
+      },
+    ],
+  };
+}

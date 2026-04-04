@@ -10,6 +10,7 @@ import {
   getTaskDueLabel,
   getTaskPositionSummaryLabel,
   type TaskMemberLookup,
+  getTaskStatusTone,
   getTaskUpdatedLabel,
 } from "@/features/tasks/lib/task-board";
 
@@ -153,11 +154,13 @@ export function TaskCard({
 }
 
 function getLaneBadgeVariant(status: TaskCardData["status"]) {
-  if (status === "IN_PROGRESS") {
+  const tone = getTaskStatusTone(status);
+
+  if (tone === "progress") {
     return "progress" as const;
   }
 
-  if (status === "DONE") {
+  if (tone === "done") {
     return "done" as const;
   }
 
