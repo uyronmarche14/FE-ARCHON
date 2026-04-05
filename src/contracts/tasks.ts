@@ -1,10 +1,14 @@
-export type ProjectStatusColor =
-  | "SLATE"
-  | "BLUE"
-  | "AMBER"
-  | "GREEN"
-  | "RED"
-  | "PURPLE";
+export type {
+  ProjectStatusColor,
+  TaskLogAssigneeValue,
+  TaskLogEventType,
+  TaskLogValue,
+} from "@/contracts/workflow";
+import type {
+  ProjectStatusColor,
+  TaskLogEventType,
+  TaskLogValue,
+} from "@/contracts/workflow";
 
 export type TaskStatus = {
   id: string;
@@ -116,23 +120,6 @@ export type DeleteTaskResponse = {
 export type TaskActionResponse = {
   message: string;
 };
-
-export type TaskLogEventType =
-  | "TASK_CREATED"
-  | "TASK_UPDATED"
-  | "STATUS_CHANGED";
-
-export type TaskLogAssigneeValue = {
-  id: string;
-  name: string;
-};
-
-export type TaskLogValue =
-  | string
-  | number
-  | boolean
-  | TaskLogAssigneeValue
-  | null;
 
 export type TaskLogEntry = {
   id: string;

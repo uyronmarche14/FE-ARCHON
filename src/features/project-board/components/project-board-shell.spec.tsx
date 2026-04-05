@@ -10,7 +10,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClientError } from "@/services/http/api-client-error";
 import { AuthSessionProvider } from "@/features/auth/providers/auth-session-provider";
-import { ProjectBoardShell } from "@/features/tasks/components/project-board-shell";
+import { ProjectBoardShell } from "@/features/project-board/components/project-board-shell";
 import { projectsQueryKey } from "@/features/projects/lib/project-query-keys";
 
 const getProjectsMock = vi.hoisted(() => vi.fn());

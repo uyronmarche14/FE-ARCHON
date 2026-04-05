@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDeleteTask } from "@/features/tasks/hooks/use-delete-task";
-import { useProjectMembers } from "@/features/tasks/hooks/use-project-members";
+import { useProjectMembers } from "@/features/projects/hooks/use-project-members";
 import { useTaskLogs } from "@/features/tasks/hooks/use-task-logs";
 import { useUpdateTaskStatus } from "@/features/tasks/hooks/use-update-task-status";
 import { useCreateTask } from "@/features/tasks/hooks/use-create-task";

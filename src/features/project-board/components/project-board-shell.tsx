@@ -50,23 +50,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateProjectStatusDialog } from "@/features/projects/components/create-project-status-dialog";
 import { InviteMemberDialog } from "@/features/projects/components/invite-member-dialog";
 import { ManageProjectStatusesDialog } from "@/features/projects/components/manage-project-statuses-dialog";
+import { useProjectMembers } from "@/features/projects/hooks/use-project-members";
 import { getLaneDotClassName } from "@/features/tasks/components/board-column";
 import { BoardContainer } from "@/features/tasks/components/board-container";
 import { KanbanBoardLane } from "@/features/tasks/components/kanban-board-lane";
-import { ProjectActivityFeedCard } from "@/features/tasks/components/project-activity-feed-card";
 import { TaskCard as BoardTaskCard } from "@/features/tasks/components/task-card";
 import { TaskDrawer } from "@/features/tasks/components/task-drawer";
 import { useProjects } from "@/features/projects/hooks/use-projects";
-import {
-  projectDetailQueryKey,
-  projectsQueryKey,
-} from "@/features/projects/lib/project-query-keys";
-import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
-import { useDeleteTask } from "@/features/tasks/hooks/use-delete-task";
-import { useProjectMembers } from "@/features/tasks/hooks/use-project-members";
-import { useProjectTasks } from "@/features/tasks/hooks/use-project-tasks";
-import { useUpdateTask } from "@/features/tasks/hooks/use-update-task";
-import { useUpdateTaskStatus } from "@/features/tasks/hooks/use-update-task-status";
+import { ProjectActivityFeedCard } from "@/features/project-board/components/project-activity-feed-card";
 import {
   applyCreatedStatusToProjectSummary,
   applyCreatedTaskToProjectSummary,
@@ -81,17 +72,28 @@ import {
   createBoardLanes,
   createBoardMetrics,
   createEmptyTaskStatuses,
-  createTaskMemberLookup,
   filterAndSortTaskStatuses,
   flattenTaskStatuses,
   getBoardProjectDescription,
   getBoardProjectName,
-  getTaskStatusChipClassName,
   insertStatusIntoTaskStatuses,
   insertTaskIntoStatuses,
   moveTaskToStatus,
   removeTaskFromStatuses,
   updateTaskInStatuses,
+} from "@/features/project-board/lib/project-board-workspace";
+import {
+  projectDetailQueryKey,
+  projectsQueryKey,
+} from "@/features/projects/lib/project-query-keys";
+import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
+import { useDeleteTask } from "@/features/tasks/hooks/use-delete-task";
+import { useProjectTasks } from "@/features/tasks/hooks/use-project-tasks";
+import { useUpdateTask } from "@/features/tasks/hooks/use-update-task";
+import { useUpdateTaskStatus } from "@/features/tasks/hooks/use-update-task-status";
+import {
+  createTaskMemberLookup,
+  getTaskStatusChipClassName,
 } from "@/features/tasks/lib/task-board";
 import {
   projectTasksQueryKey,

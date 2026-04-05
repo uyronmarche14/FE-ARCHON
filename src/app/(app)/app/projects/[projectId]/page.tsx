@@ -1,4 +1,4 @@
-import { ProjectBoardShell } from "@/features/tasks/components/project-board-shell";
+import { ProjectBoardShell } from "@/features/project-board/components/project-board-shell";
 
 type ProjectBoardPageProps = {
   params: Promise<{ projectId: string }>;

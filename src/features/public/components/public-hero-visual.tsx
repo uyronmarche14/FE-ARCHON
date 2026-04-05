@@ -11,9 +11,9 @@ import { TaskCard } from "@/features/tasks/components/task-card";
 import {
   createBoardLanes,
   createBoardMetrics,
-  createTaskMemberLookup,
   filterAndSortTaskStatuses,
-} from "@/features/tasks/lib/task-board";
+} from "@/features/project-board/lib/project-board-workspace";
+import { createTaskMemberLookup } from "@/features/tasks/lib/task-board";
 import {
   publicHeroActivityEntries,
   publicHeroBoardMeta,

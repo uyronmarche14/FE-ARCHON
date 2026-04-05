@@ -1,10 +1,10 @@
+import type { ProjectTaskStatus } from "@/contracts/tasks";
 import type {
   ProjectStatusColor,
-  ProjectTaskStatus,
   TaskLogEventType,
   TaskLogValue,
-} from "@/contracts/tasks";
-export type { ProjectStatusColor } from "@/contracts/tasks";
+} from "@/contracts/workflow";
+export type { ProjectStatusColor } from "@/contracts/workflow";
 
 export type ProjectRole = "OWNER" | "MEMBER";
 

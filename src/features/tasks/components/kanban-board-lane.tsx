@@ -7,7 +7,8 @@ import {
   BoardLaneEmptyState,
 } from "@/features/tasks/components/board-column";
 import { DraggableTaskCard } from "@/features/tasks/components/draggable-task-card";
-import type { BoardLane, TaskMemberLookup } from "@/features/tasks/lib/task-board";
+import type { BoardLane } from "@/features/project-board/lib/project-board-workspace";
+import type { TaskMemberLookup } from "@/features/tasks/lib/task-board";
 import { cn } from "@/lib/utils";
 
 type KanbanBoardLaneProps = {

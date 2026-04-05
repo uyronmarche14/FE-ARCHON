@@ -5,7 +5,7 @@ import {
   applyTaskStatusChangeToProjectsList,
   insertStatusIntoTaskStatuses,
   moveTaskToStatus,
-} from "@/features/tasks/lib/task-board";
+} from "@/features/project-board/lib/project-board-workspace";
 
 function createTaskStatus(overrides: Partial<TaskStatus> = {}): TaskStatus {
   return {
@@ -69,7 +69,7 @@ function createProjectSummary(
   };
 }
 
-describe("task-board helpers", () => {
+describe("project-board workspace helpers", () => {
   it("moves a task between dynamic statuses and clears position for v1 kanban moves", () => {
     const todoStatus = createProjectTaskStatus({
       id: "status-todo",
