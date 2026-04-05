@@ -30,13 +30,16 @@ import {
   type BoardTaskSort,
   type BoardTaskStatusFilter,
 } from "@/features/project-board/lib/project-board-workspace";
+import { createStatusLaneDragId } from "@/features/project-board/lib/project-board-dnd";
 import { cn } from "@/lib/utils";
 
 type ProjectBoardBoardTabProps = {
   activeDragTask: TaskCard | null;
+  activeLaneStatusId: string | null;
   assigneeFilter: BoardTaskAssigneeFilter;
   assigneeOptions: Array<{ label: string; value: string }>;
   boardFilters: BoardFilterChip[];
+  canReorderStatuses: boolean;
   dueDateFilter: BoardTaskDueDateFilter;
   dueDateOptions: Array<{ label: string; value: BoardTaskDueDateFilter }>;
   lanes: BoardLane[];
@@ -61,9 +64,11 @@ type ProjectBoardBoardTabProps = {
 
 export function ProjectBoardBoardTab({
   activeDragTask,
+  activeLaneStatusId,
   assigneeFilter,
   assigneeOptions,
   boardFilters,
+  canReorderStatuses,
   dueDateFilter,
   dueDateOptions,
   lanes,
@@ -98,14 +103,24 @@ export function ProjectBoardBoardTab({
       lanes.map((lane) => (
         <KanbanBoardLane
           key={`desktop:${lane.status.id}`}
+          canReorder={canReorderStatuses}
+          isLaneDragActive={activeLaneStatusId === lane.status.id}
           lane={lane}
+          laneDragId={createStatusLaneDragId(lane.status.id)}
           memberLookup={memberLookup}
           onAddTask={onOpenCreateTask}
           onOpenTask={onOpenTask}
           presentation="desktop"
         />
       )),
-    [lanes, memberLookup, onOpenCreateTask, onOpenTask],
+    [
+      activeLaneStatusId,
+      canReorderStatuses,
+      lanes,
+      memberLookup,
+      onOpenCreateTask,
+      onOpenTask,
+    ],
   );
 
   const mobileBoardLanes = useMemo(

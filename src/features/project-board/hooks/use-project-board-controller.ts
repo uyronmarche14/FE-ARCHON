@@ -3,7 +3,11 @@
 import { useMemo, useState } from "react";
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ProjectStatusResponse, ProjectsListResponse } from "@/contracts/projects";
+import type {
+  ProjectDetail,
+  ProjectStatusResponse,
+  ProjectsListResponse,
+} from "@/contracts/projects";
 import type {
   CreateTaskRequest,
   ProjectTasksResponse,
@@ -18,6 +22,7 @@ import { useCreateTask } from "@/features/tasks/hooks/use-create-task";
 import { useDeleteTask } from "@/features/tasks/hooks/use-delete-task";
 import { useProjectMembers } from "@/features/projects/hooks/use-project-members";
 import { useProjects } from "@/features/projects/hooks/use-projects";
+import { useReorderProjectStatuses } from "@/features/projects/hooks/use-reorder-project-statuses";
 import { useProjectTasks } from "@/features/tasks/hooks/use-project-tasks";
 import { useUpdateTask } from "@/features/tasks/hooks/use-update-task";
 import { useUpdateTaskStatus } from "@/features/tasks/hooks/use-update-task-status";
@@ -26,6 +31,7 @@ import {
   projectsQueryKey,
 } from "@/features/projects/lib/project-query-keys";
 import {
+  applyStatusReorderToProjectsList,
   applyCreatedStatusToProjectSummary,
   applyCreatedTaskToProjectSummary,
   applyDeletedTaskToProjectSummary,
@@ -47,8 +53,10 @@ import {
   insertTaskIntoStatuses,
   moveTaskToStatus,
   removeTaskFromStatuses,
+  reorderTaskStatuses,
   updateTaskInStatuses,
 } from "@/features/project-board/lib/project-board-workspace";
+import { parseStatusLaneDragId } from "@/features/project-board/lib/project-board-dnd";
 import {
   createTaskMemberLookup,
   type TaskMemberLookup,
@@ -80,9 +88,11 @@ export function useProjectBoardController(projectId: string) {
   const createTaskMutation = useCreateTask(projectId);
   const updateTaskMutation = useUpdateTask();
   const updateTaskStatusMutation = useUpdateTaskStatus();
+  const reorderProjectStatusesMutation = useReorderProjectStatuses(projectId);
   const deleteTaskMutation = useDeleteTask();
   const [drawerState, setDrawerState] = useState<TaskDrawerState | null>(null);
   const [activeDragTaskId, setActiveDragTaskId] = useState<string | null>(null);
+  const [activeLaneStatusId, setActiveLaneStatusId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] =
     useState<BoardTaskStatusFilter>("ALL");
@@ -471,7 +481,124 @@ export function useProjectBoardController(projectId: string) {
     }
   }
 
+  async function handleStatusLaneReorder(
+    movedStatusId: string,
+    targetStatusId: string,
+  ) {
+    await Promise.all([
+      queryClient.cancelQueries({
+        queryKey: projectTasksQueryKey(projectId),
+      }),
+      queryClient.cancelQueries({
+        queryKey: projectsQueryKey,
+      }),
+      queryClient.cancelQueries({
+        queryKey: projectDetailQueryKey(projectId),
+      }),
+    ]);
+
+    const currentTaskResponse = queryClient.getQueryData<ProjectTasksResponse>(
+      projectTasksQueryKey(projectId),
+    );
+
+    if (!currentTaskResponse) {
+      return;
+    }
+
+    const nextStatuses = reorderTaskStatuses(
+      currentTaskResponse.statuses,
+      movedStatusId,
+      targetStatusId,
+    );
+
+    if (nextStatuses === currentTaskResponse.statuses) {
+      return;
+    }
+
+    const previousProjects = queryClient.getQueryData<ProjectsListResponse>(
+      projectsQueryKey,
+    );
+    const previousProjectDetail = queryClient.getQueryData<ProjectDetail>(
+      projectDetailQueryKey(projectId),
+    );
+
+    queryClient.setQueryData<ProjectTasksResponse>(
+      projectTasksQueryKey(projectId),
+      {
+        statuses: nextStatuses,
+      },
+    );
+    queryClient.setQueryData<ProjectsListResponse | undefined>(
+      projectsQueryKey,
+      (currentProjects) =>
+        applyStatusReorderToProjectsList(
+          currentProjects,
+          projectId,
+          movedStatusId,
+          targetStatusId,
+        ),
+    );
+    queryClient.setQueryData<ProjectDetail | undefined>(
+      projectDetailQueryKey(projectId),
+      (currentProjectDetail) =>
+        currentProjectDetail
+          ? {
+              ...currentProjectDetail,
+              statuses: reorderTaskStatuses(
+                currentProjectDetail.statuses,
+                movedStatusId,
+                targetStatusId,
+              ),
+            }
+          : currentProjectDetail,
+    );
+
+    try {
+      await reorderProjectStatusesMutation.mutateAsync({
+        statuses: nextStatuses.map((status) => ({
+          id: status.id,
+        })),
+      });
+
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: projectTasksQueryKey(projectId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: projectsQueryKey,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: projectDetailQueryKey(projectId),
+        }),
+      ]);
+    } catch (error) {
+      queryClient.setQueryData<ProjectTasksResponse>(
+        projectTasksQueryKey(projectId),
+        currentTaskResponse,
+      );
+      queryClient.setQueryData<ProjectsListResponse | undefined>(
+        projectsQueryKey,
+        previousProjects,
+      );
+      queryClient.setQueryData<ProjectDetail | undefined>(
+        projectDetailQueryKey(projectId),
+        previousProjectDetail,
+      );
+      showApiErrorToast(error, "Unable to reorder statuses right now.");
+    }
+  }
+
   function handleDragStart(event: DragStartEvent) {
+    const laneStatusId = parseStatusLaneDragId(event.active.id);
+
+    if (laneStatusId) {
+      if (canManageStatuses) {
+        setActiveLaneStatusId(laneStatusId);
+      }
+
+      return;
+    }
+
     if (typeof event.active.id === "string") {
       setActiveDragTaskId(event.active.id);
     }
@@ -479,17 +606,39 @@ export function useProjectBoardController(projectId: string) {
 
   function handleDragCancel() {
     setActiveDragTaskId(null);
+    setActiveLaneStatusId(null);
   }
 
   function handleDragEnd(event: DragEndEvent) {
-    const taskId = typeof event.active.id === "string" ? event.active.id : null;
     const overId = typeof event.over?.id === "string" ? event.over.id : null;
+    const draggedLaneStatusId = parseStatusLaneDragId(event.active.id);
+
+    setActiveDragTaskId(null);
+    setActiveLaneStatusId(null);
+
+    if (draggedLaneStatusId) {
+      if (!canManageStatuses) {
+        return;
+      }
+
+      const targetLaneStatusId =
+        overId !== null && statuses.some((status) => status.id === overId)
+          ? overId
+          : null;
+
+      if (!targetLaneStatusId || draggedLaneStatusId === targetLaneStatusId) {
+        return;
+      }
+
+      void handleStatusLaneReorder(draggedLaneStatusId, targetLaneStatusId);
+      return;
+    }
+
+    const taskId = typeof event.active.id === "string" ? event.active.id : null;
     const targetStatusId =
       overId !== null && statuses.some((status) => status.id === overId)
         ? overId
         : null;
-
-    setActiveDragTaskId(null);
 
     if (!taskId || !targetStatusId) {
       return;
@@ -562,6 +711,7 @@ export function useProjectBoardController(projectId: string) {
     selectedSortLabel,
     memberLookup,
     activeDragTask,
+    activeLaneStatusId,
     activeSurfaceTab,
     activityEventType,
     activitySearchQuery,

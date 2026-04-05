@@ -78,6 +78,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
         <TabsContent value="board">
           <ProjectBoardBoardTab
             activeDragTask={board.activeDragTask}
+            activeLaneStatusId={board.activeLaneStatusId}
             assigneeFilter={board.assigneeFilter}
             assigneeOptions={board.assigneeOptions.map((option) => ({
               label:
@@ -87,6 +88,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
               value: option.value,
             }))}
             boardFilters={board.boardFilters}
+            canReorderStatuses={board.canManageStatuses}
             dueDateFilter={board.dueDateFilter}
             dueDateOptions={board.dueDateOptions}
             lanes={board.lanes}

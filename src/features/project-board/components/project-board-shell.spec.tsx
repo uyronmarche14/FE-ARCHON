@@ -21,6 +21,7 @@ const getTaskLogsMock = vi.hoisted(() => vi.fn());
 const createTaskMock = vi.hoisted(() => vi.fn());
 const updateTaskMock = vi.hoisted(() => vi.fn());
 const patchTaskStatusMock = vi.hoisted(() => vi.fn());
+const reorderProjectStatusesMock = vi.hoisted(() => vi.fn());
 const deleteTaskMock = vi.hoisted(() => vi.fn());
 const dndMock = vi.hoisted(() => {
   type DragHandlers = {
@@ -189,6 +190,10 @@ vi.mock("@/features/tasks/services/patch-task-status", () => ({
   patchTaskStatus: patchTaskStatusMock,
 }));
 
+vi.mock("@/features/projects/services/reorder-project-statuses", () => ({
+  reorderProjectStatuses: reorderProjectStatusesMock,
+}));
+
 vi.mock("@/features/tasks/services/delete-task", () => ({
   deleteTask: deleteTaskMock,
 }));
@@ -275,6 +280,12 @@ function getTaskOpenButton(title: string) {
   return button;
 }
 
+function getDesktopLaneTitles() {
+  return within(screen.getByTestId("board-lanes-scroll-area"))
+    .getAllByRole("heading", { level: 3 })
+    .map((heading) => heading.textContent ?? "");
+}
+
 type TaskState = Array<{
   id: string;
   projectId: string;
@@ -289,6 +300,7 @@ type TaskState = Array<{
 }>;
 
 let taskState: TaskState = [];
+let statusOrder: Array<keyof typeof STATUS_DEFINITIONS> = [];
 let taskLogState: Record<string, Array<{
   id: string;
   eventType: "TASK_CREATED" | "TASK_UPDATED" | "STATUS_CHANGED";
@@ -327,6 +339,21 @@ const STATUS_DEFINITIONS = {
   },
 } as const;
 
+function getStatusDefinition(statusKey: keyof typeof STATUS_DEFINITIONS) {
+  return {
+    ...STATUS_DEFINITIONS[statusKey],
+    position: statusOrder.indexOf(statusKey) + 1,
+  };
+}
+
+function getStatusKeyById(statusId: string) {
+  return (
+    (Object.entries(STATUS_DEFINITIONS).find(
+      ([, definition]) => definition.id === statusId,
+    )?.[0] as keyof typeof STATUS_DEFINITIONS | undefined) ?? null
+  );
+}
+
 function createTaskCardFromState(
   task: TaskState[number],
   overrides: Partial<TaskState[number]> = {},
@@ -335,7 +362,7 @@ function createTaskCardFromState(
     ...task,
     ...overrides,
   };
-  const status = STATUS_DEFINITIONS[nextTask.status];
+  const status = getStatusDefinition(nextTask.status);
 
   return {
     ...nextTask,
@@ -351,9 +378,9 @@ function createTaskCardFromState(
 }
 
 function createProjectStatusesFromState(tasks: TaskState) {
-  return (Object.keys(STATUS_DEFINITIONS) as Array<keyof typeof STATUS_DEFINITIONS>)
+  return statusOrder
     .map((statusKey) => ({
-      ...STATUS_DEFINITIONS[statusKey],
+      ...getStatusDefinition(statusKey),
       tasks: tasks
         .filter((task) => task.status === statusKey)
         .map((task) => createTaskCardFromState(task)),
@@ -385,6 +412,7 @@ function formatTaskStatusLabel(status: "TODO" | "IN_PROGRESS" | "DONE") {
 describe("ProjectBoardShell", () => {
   beforeEach(() => {
     setViewportWidth(1024);
+    statusOrder = ["TODO", "IN_PROGRESS", "DONE"];
 
     taskState = [
       {
@@ -422,6 +450,7 @@ describe("ProjectBoardShell", () => {
     createTaskMock.mockReset();
     updateTaskMock.mockReset();
     patchTaskStatusMock.mockReset();
+    reorderProjectStatusesMock.mockReset();
     deleteTaskMock.mockReset();
     dndMock.reset();
     toastMocks.showSuccessToast.mockReset();
@@ -615,6 +644,33 @@ describe("ProjectBoardShell", () => {
         };
 
         return updatedTask;
+      },
+    );
+    reorderProjectStatusesMock.mockImplementation(
+      async (
+        projectId: string,
+        request: {
+          statuses: Array<{ id: string }>;
+        },
+      ) => {
+        expect(projectId).toBe("qa-readiness");
+
+        statusOrder = request.statuses
+          .map((status) => getStatusKeyById(status.id))
+          .filter((statusKey): statusKey is keyof typeof STATUS_DEFINITIONS =>
+            statusKey !== null,
+          );
+
+        return {
+          items: createProjectStatusesFromState(taskState).map((status) => ({
+            id: status.id,
+            name: status.name,
+            position: status.position,
+            isClosed: status.isClosed,
+            color: status.color,
+            taskCount: status.tasks.length,
+          })),
+        };
       },
     );
     deleteTaskMock.mockImplementation(async (taskId: string) => {
@@ -898,6 +954,104 @@ describe("ProjectBoardShell", () => {
     });
   });
 
+  it("shows lane drag handles only for users who can manage statuses", async () => {
+    const { unmount } = renderBoard();
+
+    expect(
+      await screen.findByRole("button", { name: /reorder todo lane/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("lane-todo")).toHaveClass("cursor-grab");
+
+    unmount();
+
+    getProjectsMock.mockResolvedValueOnce({
+      items: [
+        {
+          ...createProjectSummaryFromTasks(taskState),
+          role: "MEMBER" as const,
+        },
+      ],
+    });
+
+    renderBoard();
+
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("button", { name: /reorder todo lane/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("lane-todo")).not.toHaveClass("cursor-grab");
+  });
+
+  it("reorders desktop lanes optimistically and persists the workflow order", async () => {
+    renderBoard();
+
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
+    expect(getDesktopLaneTitles()).toEqual(["Todo", "In Progress", "Done"]);
+
+    await act(async () => {
+      dndMock.triggerDragStart("status-lane:status-todo");
+      dndMock.triggerDragEnd("status-lane:status-todo", STATUS_DEFINITIONS.DONE.id);
+    });
+
+    await waitFor(() => {
+      expect(reorderProjectStatusesMock).toHaveBeenCalledWith("qa-readiness", {
+        statuses: [
+          { id: STATUS_DEFINITIONS.IN_PROGRESS.id },
+          { id: STATUS_DEFINITIONS.DONE.id },
+          { id: STATUS_DEFINITIONS.TODO.id },
+        ],
+      });
+    });
+
+    await waitFor(() => {
+      expect(getDesktopLaneTitles()).toEqual(["In Progress", "Done", "Todo"]);
+    });
+  });
+
+  it("restores lane order when workflow reorder fails", async () => {
+    const deferredReorder = createDeferredPromise<{
+      items: Array<{
+        id: string;
+        name: string;
+        position: number;
+        isClosed: boolean;
+        color: string;
+        taskCount: number;
+      }>;
+    }>();
+    reorderProjectStatusesMock.mockReturnValueOnce(deferredReorder.promise);
+
+    renderBoard();
+
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
+
+    await act(async () => {
+      dndMock.triggerDragEnd("status-lane:status-todo", STATUS_DEFINITIONS.DONE.id);
+    });
+
+    await waitFor(() => {
+      expect(getDesktopLaneTitles()).toEqual(["In Progress", "Done", "Todo"]);
+    });
+
+    deferredReorder.reject(
+      new ApiClientError({
+        message: "Unable to reorder statuses right now.",
+        code: "VALIDATION_ERROR",
+        status: 400,
+        details: undefined,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(getDesktopLaneTitles()).toEqual(["Todo", "In Progress", "Done"]);
+      expect(toastMocks.showApiErrorToast).toHaveBeenCalledWith(
+        expect.any(ApiClientError),
+        "Unable to reorder statuses right now.",
+      );
+    });
+  });
+
   it("opens create from the header with Todo selected by default", async () => {
     renderBoard();
 
@@ -1063,6 +1217,38 @@ describe("ProjectBoardShell", () => {
     expect(screen.getByText("No cards in Todo.")).toBeInTheDocument();
     expect(screen.getByText("No cards in In Progress.")).toBeInTheDocument();
     expect(screen.getByText("Publish smoke notes")).toBeInTheDocument();
+  });
+
+  it("keeps the desktop board horizontally scrollable when seven statuses are present", async () => {
+    getProjectTasksMock.mockResolvedValueOnce({
+      statuses: Array.from({ length: 7 }, (_, index) => ({
+        id: `status-${index + 1}`,
+        name: `Stage ${index + 1}`,
+        position: index + 1,
+        isClosed: index === 6,
+        color: (index === 6 ? "GREEN" : index % 2 === 0 ? "SLATE" : "BLUE") as
+          | "GREEN"
+          | "SLATE"
+          | "BLUE",
+        tasks: [],
+      })),
+    });
+
+    renderBoard();
+
+    expect(
+      await screen.findByRole("heading", { name: "Stage 7" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("board-lanes-scroll-area")).toBeInTheDocument();
+    expect(getDesktopLaneTitles()).toEqual([
+      "Stage 1",
+      "Stage 2",
+      "Stage 3",
+      "Stage 4",
+      "Stage 5",
+      "Stage 6",
+      "Stage 7",
+    ]);
   });
 
   it("shows a retry surface when task loading fails and can recover", async () => {
@@ -1288,5 +1474,8 @@ describe("ProjectBoardShell", () => {
     expect(screen.getByText("Draft API envelope")).toBeInTheDocument();
     expect(screen.getByText("Wire refresh token flow")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Done" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /reorder todo lane/i }),
+    ).not.toBeInTheDocument();
   });
 });

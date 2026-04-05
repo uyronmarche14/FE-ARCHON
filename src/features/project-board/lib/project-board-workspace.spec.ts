@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { ProjectsListResponse, ProjectSummary } from "@/contracts/projects";
 import type { ProjectTaskStatus, TaskCard, TaskStatus } from "@/contracts/tasks";
 import {
+  applyStatusReorderToProjectsList,
   applyTaskStatusChangeToProjectsList,
   insertStatusIntoTaskStatuses,
   moveTaskToStatus,
+  reorderTaskStatuses,
 } from "@/features/project-board/lib/project-board-workspace";
 
 function createTaskStatus(overrides: Partial<TaskStatus> = {}): TaskStatus {
@@ -275,5 +277,137 @@ describe("project-board workspace helpers", () => {
       position: 2,
       tasks: [],
     });
+  });
+
+  it("reorders task statuses and rewrites embedded task status positions", () => {
+    const todoStatus = createProjectTaskStatus({
+      id: "status-todo",
+      name: "Todo",
+      position: 1,
+      tasks: [
+        createTask({
+          id: "task-todo",
+          statusId: "status-todo",
+          status: createTaskStatus({
+            id: "status-todo",
+            name: "Todo",
+            position: 1,
+          }),
+        }),
+      ],
+    });
+    const progressStatus = createProjectTaskStatus({
+      id: "status-progress",
+      name: "In Progress",
+      position: 2,
+      color: "BLUE",
+      tasks: [
+        createTask({
+          id: "task-progress",
+          statusId: "status-progress",
+          status: createTaskStatus({
+            id: "status-progress",
+            name: "In Progress",
+            position: 2,
+            color: "BLUE",
+          }),
+        }),
+      ],
+    });
+    const doneStatus = createProjectTaskStatus({
+      id: "status-done",
+      name: "Done",
+      position: 3,
+      isClosed: true,
+      tasks: [],
+    });
+
+    const reorderedStatuses = reorderTaskStatuses(
+      [todoStatus, progressStatus, doneStatus],
+      "status-todo",
+      "status-done",
+    );
+
+    expect(reorderedStatuses.map((status) => status.id)).toEqual([
+      "status-progress",
+      "status-done",
+      "status-todo",
+    ]);
+    expect(reorderedStatuses.map((status) => status.position)).toEqual([1, 2, 3]);
+    expect(reorderedStatuses[0]?.tasks[0]?.status.position).toBe(1);
+    expect(reorderedStatuses[0]?.tasks[0]?.status.name).toBe("In Progress");
+    expect(reorderedStatuses[2]?.tasks[0]?.status.position).toBe(3);
+    expect(reorderedStatuses[2]?.tasks[0]?.status.name).toBe("Todo");
+  });
+
+  it("reorders project summaries immutably for optimistic status moves", () => {
+    const projects: ProjectsListResponse = {
+      items: [
+        createProjectSummary({
+          id: "project-1",
+          statuses: [
+            {
+              id: "status-todo",
+              name: "Todo",
+              position: 1,
+              isClosed: false,
+              color: "SLATE",
+              taskCount: 2,
+            },
+            {
+              id: "status-progress",
+              name: "In Progress",
+              position: 2,
+              isClosed: false,
+              color: "BLUE",
+              taskCount: 1,
+            },
+            {
+              id: "status-done",
+              name: "Done",
+              position: 3,
+              isClosed: true,
+              color: "GREEN",
+              taskCount: 0,
+            },
+          ],
+        }),
+      ],
+    };
+
+    const nextProjects = applyStatusReorderToProjectsList(
+      projects,
+      "project-1",
+      "status-todo",
+      "status-done",
+    );
+
+    expect(nextProjects).not.toBe(projects);
+    expect(nextProjects?.items[0]?.statuses).toEqual([
+      {
+        id: "status-progress",
+        name: "In Progress",
+        position: 1,
+        isClosed: false,
+        color: "BLUE",
+        taskCount: 1,
+      },
+      {
+        id: "status-done",
+        name: "Done",
+        position: 2,
+        isClosed: true,
+        color: "GREEN",
+        taskCount: 0,
+      },
+      {
+        id: "status-todo",
+        name: "Todo",
+        position: 3,
+        isClosed: false,
+        color: "SLATE",
+        taskCount: 2,
+      },
+    ]);
   });
 });

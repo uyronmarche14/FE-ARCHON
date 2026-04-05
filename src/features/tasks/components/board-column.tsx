@@ -1,5 +1,5 @@
 import * as React from "react";
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, CSSProperties, HTMLAttributes, ReactNode } from "react";
 import { MoreHorizontal, Plus } from "lucide-react";
 import type { TaskStatus } from "@/contracts/tasks";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,13 @@ type BoardColumnProps = {
   dataTestId?: string;
   density?: "default" | "compact";
   description: string;
+  dragHandle?: ReactNode;
+  isLaneDragActive?: boolean;
+  isLaneDraggable?: boolean;
   onAddTask: () => void;
   presentation?: "desktop" | "mobile";
+  surfaceStyle?: CSSProperties;
+  dragSurfaceProps?: HTMLAttributes<HTMLElement>;
   showActions?: boolean;
   status: TaskStatus;
   title: string;
@@ -34,8 +39,13 @@ export const BoardColumn = React.forwardRef<HTMLElement, BoardColumnProps>(
       dataTestId,
       density = "default",
       description,
+      dragSurfaceProps,
+      dragHandle,
+      isLaneDragActive = false,
+      isLaneDraggable = false,
       onAddTask,
       presentation = "desktop",
+      surfaceStyle,
       showActions = true,
       status,
       title,
@@ -45,22 +55,27 @@ export const BoardColumn = React.forwardRef<HTMLElement, BoardColumnProps>(
     return (
       <section
         ref={ref}
+        style={surfaceStyle}
         data-testid={dataTestId}
         className={cn(
-          "min-w-0 overflow-hidden rounded-[1.2rem] border shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+          "min-w-0 overflow-hidden rounded-[1.2rem] border shadow-[0_1px_2px_rgba(15,23,42,0.04)] transform-gpu transition-shadow",
           presentation === "desktop"
             ? density === "compact"
               ? "w-[18.5rem] shrink-0 rounded-[1rem]"
               : "w-[20.5rem] shrink-0"
             : "w-full",
+          isLaneDraggable && "cursor-grab active:cursor-grabbing",
+          isLaneDragActive && "ring-2 ring-primary/15",
           getTaskStatusSurfaceClassName(status),
           className,
         )}
+        {...dragSurfaceProps}
       >
         <BoardColumnHeader
           count={count}
           density={density}
           description={description}
+          dragHandle={dragHandle}
           onAddTask={onAddTask}
           showActions={showActions}
           status={status}
@@ -78,6 +93,7 @@ type BoardColumnHeaderProps = {
   count: number;
   density: "default" | "compact";
   description: string;
+  dragHandle?: ReactNode;
   onAddTask: () => void;
   showActions: boolean;
   status: TaskStatus;
@@ -88,6 +104,7 @@ export function BoardColumnHeader({
   count,
   density,
   description,
+  dragHandle,
   onAddTask,
   showActions,
   status,
@@ -95,10 +112,10 @@ export function BoardColumnHeader({
 }: BoardColumnHeaderProps) {
   return (
     <header
-        className={cn(
-          "sticky top-0 z-10 border-b border-black/5 bg-white/75 backdrop-blur supports-[backdrop-filter]:bg-white/65",
-          density === "compact" ? "px-3 py-2.5" : "px-3.5 py-3",
-        )}
+      className={cn(
+        "sticky top-0 z-10 border-b border-black/5 bg-white/75 backdrop-blur supports-[backdrop-filter]:bg-white/65",
+        density === "compact" ? "px-3 py-2.5" : "px-3.5 py-3",
+      )}
     >
       <div
         className={cn(
@@ -138,27 +155,34 @@ export function BoardColumnHeader({
           </p>
         </div>
 
-        {showActions ? (
+        {showActions || dragHandle ? (
           <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="rounded-lg text-muted-foreground"
-              aria-label={`Add task to ${title}`}
-              onClick={onAddTask}
-            >
-              <Plus className="size-3.5" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="rounded-lg text-muted-foreground"
-              aria-label={`${title} lane options`}
-            >
-              <MoreHorizontal className="size-3.5" />
-            </Button>
+            {dragHandle}
+            {showActions ? (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="rounded-lg text-muted-foreground"
+                  aria-label={`Add task to ${title}`}
+                  onPointerDownCapture={(event) => event.stopPropagation()}
+                  onClick={onAddTask}
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="rounded-lg text-muted-foreground"
+                  aria-label={`${title} lane options`}
+                  onPointerDownCapture={(event) => event.stopPropagation()}
+                >
+                  <MoreHorizontal className="size-3.5" />
+                </Button>
+              </>
+            ) : null}
           </div>
         ) : null}
       </div>

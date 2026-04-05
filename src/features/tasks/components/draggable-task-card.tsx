@@ -34,6 +34,7 @@ export function DraggableTaskCard({
     <div
       ref={setNodeRef}
       style={style}
+      data-task-card-drag-root="true"
       className={cn(
         "h-full w-full transform-gpu transition-shadow",
         isDragging && "z-20",

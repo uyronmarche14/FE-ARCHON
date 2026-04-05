@@ -359,6 +359,62 @@ export function insertStatusIntoTaskStatuses(
   );
 }
 
+export function reorderTaskStatuses(
+  statuses: ProjectTaskStatus[],
+  movedStatusId: string,
+  targetStatusId: string,
+): ProjectTaskStatus[] {
+  const reorderedStatuses = reorderStatusCollection(
+    statuses,
+    movedStatusId,
+    targetStatusId,
+  );
+
+  if (reorderedStatuses === statuses) {
+    return statuses;
+  }
+
+  return reorderedStatuses.map((status) => ({
+    ...status,
+    tasks: status.tasks.map((task) => ({
+      ...task,
+      status: {
+        ...task.status,
+        name: status.name,
+        position: status.position,
+        isClosed: status.isClosed,
+        color: status.color,
+      },
+    })),
+  }));
+}
+
+export function applyStatusReorderToProjectsList(
+  projects: ProjectsListResponse | undefined,
+  projectId: string,
+  movedStatusId: string,
+  targetStatusId: string,
+) {
+  if (!projects || movedStatusId === targetStatusId) {
+    return projects;
+  }
+
+  return {
+    items: projects.items.map((project) =>
+      project.id === projectId
+        ? {
+            ...project,
+            statuses: reorderStatusCollection(
+              project.statuses,
+              movedStatusId,
+              targetStatusId,
+            ),
+          }
+        : project,
+    ),
+  } satisfies ProjectsListResponse;
+}
+
 export function getBoardProjectName(
   projectId: string,
   projectSummary?: ProjectSummary | null,
@@ -383,6 +439,36 @@ function getBoardStatusDescription(status: TaskStatus, index: number) {
   }
 
   return "Work currently moving through this workflow stage.";
+}
+
+function reorderStatusCollection<T extends { id: string; position: number }>(
+  statuses: T[],
+  movedStatusId: string,
+  targetStatusId: string,
+): T[] {
+  const movedIndex = statuses.findIndex((status) => status.id === movedStatusId);
+  const targetIndex = statuses.findIndex(
+    (status) => status.id === targetStatusId,
+  );
+
+  if (
+    movedIndex < 0 ||
+    targetIndex < 0 ||
+    movedIndex === targetIndex ||
+    statuses.length <= 1
+  ) {
+    return statuses;
+  }
+
+  const nextStatuses = [...statuses];
+  const [movedStatus] = nextStatuses.splice(movedIndex, 1);
+
+  nextStatuses.splice(targetIndex, 0, movedStatus);
+
+  return nextStatuses.map((status, index) => ({
+    ...status,
+    position: index + 1,
+  }));
 }
 
 function sortBoardTasks(tasks: TaskCard[], sortOrder: BoardTaskSort = "DEFAULT") {
