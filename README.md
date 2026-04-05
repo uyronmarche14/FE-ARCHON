@@ -1,153 +1,82 @@
-# Archon Frontend
+# DOWINN Frontend
 
-This workspace owns the Next.js frontend for Archon. It is the user-facing
-application layer for authentication, project discovery, the project board
-workspace, and the richer task collaboration drawer.
+This package contains the Next.js frontend for DOWINN. It is the user-facing
+application for authentication, project discovery, the project board
+workspace, and the task collaboration drawer.
 
-Canonical docs live in:
+## Project Overview
 
-- `../README.md`
-- `../docs/ARCHITECTURE.md`
-- `../docs/FRONTEND-PLAN.md`
-- `../docs/API.md`
-- `../docs/REVIEWER-PACK.md`
+The frontend is organized around four main product surfaces:
 
-## What This Workspace Owns
+1. Public and auth flows: landing, signup, login, email verification, and
+   invite entry
+2. Projects dashboard: project discovery, creation, counts, and navigation
+3. Project board workspace: the Kanban-style work area for a single project
+4. Task collaboration detail: a task drawer with comments, attachments,
+   subtasks, and audit history
 
-The frontend is organized around four shipped surfaces:
+Core responsibilities include:
 
-1. Public and auth
-2. Projects dashboard
-3. Project board workspace
-4. Task collaboration detail
+- rendering public pages and protected app routes
+- loading project and task data from the backend API
+- managing board filters, sorting, and workspace interactions
+- handling task create, edit, move, and detail review flows
+- showing resilient loading, empty, and error states
 
-Responsibilities include:
-
-- public landing, login, signup, verification, and invite entry flows
-- protected app shell and session-aware routing
-- projects dashboard loading, empty, retry, and error states
-- project board workspace orchestration, including tabs, filters, metrics, and
-  activity composition
-- task create, edit, delete, move, and detail review inside the task drawer
-- comments, attachments, subtasks, checklist, and audit-history rendering
-- query caching, mutation syncing, toast feedback, and route-level resilience
-
-## Tech Stack
+## Stack
 
 - Next.js 16 App Router
 - React 19
-- TypeScript 5
+- TypeScript
 - Tailwind CSS 4
-- shadcn/ui on top of Radix primitives
+- shadcn/ui
 - TanStack Query
 - Axios
 - `@dnd-kit/core`
 - Sonner
 - Vitest and Testing Library
 
-## Runtime Flow
+## Local Defaults
 
-```text
-App Route
--> feature component
--> feature hook
--> feature service
--> shared Axios client
--> backend /api/v1 endpoint
+The checked-in `.env.example` uses these local defaults:
+
+- app URL: `http://localhost:3000`
+- backend API URL: `http://localhost:4000/api/v1`
+
+Environment variables:
+
+- `NEXT_PUBLIC_APP_URL`
+- `NEXT_PUBLIC_API_URL`
+
+## Run Locally
+
+From `frontend/`:
+
+1. Copy the env file:
+
+```bash
+cp .env.example .env.local
 ```
 
-The most important page, `/app/projects/[projectId]`, is intentionally a
-composed workspace:
+2. Install dependencies:
 
-- `projects` provides project identity, members, invites, statuses, and project
-  activity
-- `tasks` provides reusable task-domain UI and task operations
-- `project-board` composes both into the main workspace surface
-
-## Folder Scaffold
-
-```text
-src/
-|-- app/                Next.js route entrypoints and route boundaries
-|-- components/
-|   |-- shared/         cross-feature shell primitives
-|   `-- ui/             reusable UI primitives
-|-- contracts/          frontend transport types and shared workflow primitives
-|-- features/
-|   |-- auth/           login, signup, verification, invite entry
-|   |-- project-board/  board workspace orchestration and workspace helpers
-|   |-- projects/       dashboard, invites, status management, project queries
-|   |-- public/         marketing and public-page presentation
-|   `-- tasks/          task drawer, form, card, comments, attachments, logs
-|-- lib/                shared utilities
-|-- providers/          app-wide query/toast/session providers
-|-- services/http/      shared Axios client and HTTP helpers
-`-- test/               frontend test setup
+```bash
+pnpm install
 ```
 
-Feature folders follow the same internal pattern where possible:
+3. Make sure the backend is running at `http://localhost:4000`
+   or update `NEXT_PUBLIC_API_URL` to match your backend.
 
-- `components/`: visible UI
-- `hooks/`: query and mutation orchestration
-- `services/`: API calls
-- `lib/`: feature-specific helpers
+4. Start the frontend:
 
-## Route Structure
+```bash
+pnpm dev
+```
 
-Implemented routes:
+5. Open `http://localhost:3000`
 
-- `/`
-- `/login`
-- `/signup`
-- `/verify-email`
-- `/invite/[token]`
-- `/app`
-- `/app/projects/[projectId]`
-
-The protected app route group includes route-level `loading.tsx` and `error.tsx`
-boundaries so the app shell stays resilient during loading and runtime
-failures.
-
-## Main Feature Slices
-
-### `features/auth`
-
-- login and signup forms
-- verification-pending signup UX
-- verification resend/confirm flows
-- invite-entry routing helpers
-
-### `features/projects`
-
-- projects dashboard
-- create-project flow
-- project invite actions
-- project status management dialogs and services
-- project-domain hooks such as member loading
-
-### `features/project-board`
-
-- `ProjectBoardShell`
-- board-level tabs, filters, metrics, and activity feed composition
-- workspace-only helpers for lanes, filters, and project-summary sync
-
-### `features/tasks`
-
-- task card, drawer, and form
-- task comments, attachments, subtasks, and logs panels
-- task create/update/delete/status services and hooks
-- reusable task formatting and status presentation helpers
-
-## Contracts
-
-Transport contracts live in `src/contracts/`:
-
-- `api.ts`: envelopes and shared API primitives
-- `auth.ts`: auth, verification, and invite transport types
-- `projects.ts`: project, member, invite, and activity transport types
-- `tasks.ts`: task, comment, attachment, log, and task-detail transport types
-- `workflow.ts`: shared workflow primitives such as status colors and task-log
-  value types
+For the full reviewer flow, sign in at `http://localhost:3000/login` after the
+backend seed flow has been run.
 
 ## Scripts
 
@@ -160,15 +89,6 @@ pnpm test
 pnpm typecheck
 ```
 
-## Local Reviewer Flow
-
-1. Start the backend on `http://localhost:4000`.
-2. Seed demo data with `POST /api/v1/seed/init`.
-3. Start the frontend.
-4. Open `http://localhost:3000/login`.
-5. Sign in with `demo.member@example.com` / `DemoPass123!`.
-6. Navigate dashboard -> project board workspace -> task drawer.
-
 ## Verification
 
 ```bash
@@ -178,8 +98,14 @@ pnpm typecheck
 pnpm build
 ```
 
-For repo-wide verification:
+## Known Issues / Incomplete Functionality
 
-```bash
-bash ../scripts/quality-gate.sh
-```
+- There is no standalone mocked API mode in this package. The main reviewer
+  flow depends on a running backend and seeded local data.
+- Email verification and invite acceptance screens are implemented in the UI,
+  but end-to-end email-driven testing depends on backend SMTP configuration.
+
+## Related Notes
+
+- [src/README.md](./src/README.md)
+- [../README.md](../README.md)
