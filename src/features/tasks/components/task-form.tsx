@@ -78,6 +78,8 @@ export function TaskForm({
   onSubmit,
   onValueChange,
 }: TaskFormProps) {
+  // Keep collection updates immutable so inline validation and accordion previews
+  // always reflect the latest draft without hidden mutation bugs.
   function updateLink(id: string, patch: Partial<TaskFormLinkValue>) {
     onValueChange(
       "links",
@@ -145,6 +147,8 @@ export function TaskForm({
             </div>
 
             <div className="space-y-2">
+              {/* The transport layer still calls this field `description`, but the
+                  product language treats it as the task summary everywhere in the UI. */}
               <Label
                 className="text-sm font-medium text-foreground/90"
                 htmlFor="task-description"
@@ -167,6 +171,8 @@ export function TaskForm({
             </div>
           </section>
 
+          {/* Keep the richer detail fields collapsed by default so quick board edits
+              still feel lightweight unless the user needs the extra structure. */}
           <Accordion type="multiple" className="grid gap-2.5">
             <AccordionItem value="acceptance-criteria">
               <AccordionTrigger>
@@ -397,6 +403,8 @@ export function TaskForm({
         <aside className="order-1 space-y-2.5 lg:order-2 lg:sticky lg:top-0">
           <TaskRailPanel title={mode === "create" ? "Initial lane" : "Current lane"}>
             {mode === "create" ? (
+              // Creation is the only moment we let the status be chosen inline here;
+              // edit mode keeps status moves in the drawer workflow rail instead.
               <div className="flex flex-wrap gap-2">
                 {statuses.map((status) => {
                   const isActive = values.statusId === status.id;

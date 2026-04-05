@@ -70,6 +70,8 @@ export function filterAndSortTaskStatuses(
   const normalizedSearchQuery = options.searchQuery.trim().toLowerCase();
 
   return statuses
+    // Filter at the lane level first so the board can keep its workflow structure
+    // even when the user scopes down to a single status chip.
     .filter(
       (status) =>
         options.statusFilter === "ALL" || status.id === options.statusFilter,
@@ -237,6 +239,8 @@ export function moveTaskToStatus(
     } as const;
   }
 
+  // Build the moved snapshot from the destination status so optimistic board state,
+  // badges, and drawer metadata all agree before the server round-trip finishes.
   const nextTask: TaskCard = {
     ...previousTask,
     statusId: nextStatus.id,
@@ -278,6 +282,8 @@ export function applyTaskStatusChangeToProjectsList(
     return projects;
   }
 
+  // The dashboard only needs status counts here, so adjust the affected summaries
+  // without forcing a full project list refetch.
   return {
     items: projects.items.map((project) =>
       project.id === projectId
