@@ -9,15 +9,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CreateProjectStatusDialog } from "@/features/projects/components/create-project-status-dialog";
 import { InviteMemberDialog } from "@/features/projects/components/invite-member-dialog";
 import { ManageProjectStatusesDialog } from "@/features/projects/components/manage-project-statuses-dialog";
+import { ProjectEditorDialog } from "@/features/projects/components/project-editor-dialog";
 import { getTaskStatusBadgeClassName } from "@/features/tasks/lib/task-board";
+import type { ProjectSummary } from "@/contracts/projects";
 
 type ProjectBoardHeaderCardProps = {
+  canEditProject: boolean;
   canInviteMembers: boolean;
   canManageStatuses: boolean;
   firstStatusId: string;
   metrics: BoardMetric[];
   onCreateTask: (statusId: string) => void;
   onProjectStatusCreated: (createdStatus: ProjectStatusResponse) => void;
+  project: Pick<ProjectSummary, "description" | "id" | "name"> | null;
   projectDescription: string;
   projectId: string;
   projectName: string;
@@ -26,12 +30,14 @@ type ProjectBoardHeaderCardProps = {
 };
 
 export function ProjectBoardHeaderCard({
+  canEditProject,
   canInviteMembers,
   canManageStatuses,
   firstStatusId,
   metrics,
   onCreateTask,
   onProjectStatusCreated,
+  project,
   projectDescription,
   projectId,
   projectName,
@@ -76,6 +82,17 @@ export function ProjectBoardHeaderCard({
           </div>
 
           <div className="flex flex-wrap gap-2">
+            {canEditProject && project ? (
+              <ProjectEditorDialog
+                mode="edit"
+                project={project}
+                trigger={
+                  <Button type="button" variant="outline" size="sm" className="rounded-xl">
+                    Edit project
+                  </Button>
+                }
+              />
+            ) : null}
             {canInviteMembers ? <InviteMemberDialog projectId={projectId} /> : null}
             {canManageStatuses ? (
               <>

@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateProjectDialog } from "@/features/projects/components/create-project-dialog";
+import { ProjectEditorDialog } from "@/features/projects/components/project-editor-dialog";
+import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
 import { useProjects } from "@/features/projects/hooks/use-projects";
 import { getProjectPath } from "@/features/projects/lib/project-paths";
 import {
@@ -26,9 +28,11 @@ import type { ProjectSummary } from "@/contracts/projects";
 import { cn } from "@/lib/utils";
 
 export function ProjectsDashboardShell() {
+  const { session } = useAuthSession();
   const projectsQuery = useProjects();
   const projectItems = projectsQuery.data?.items;
   const projects = useMemo(() => projectItems ?? [], [projectItems]);
+  const canEditAnyProjectAsAdmin = session?.user.role === "ADMIN";
 
   const totals = useMemo(() => {
     const totalTrackedTasks = projects.reduce((total, project) => {
@@ -191,7 +195,11 @@ export function ProjectsDashboardShell() {
           projects.length > 0 ? (
             <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
               {projects.map((project) => (
-                <ProjectDashboardCard key={project.id} project={project} />
+                <ProjectDashboardCard
+                  key={project.id}
+                  canEditAsAdmin={canEditAnyProjectAsAdmin}
+                  project={project}
+                />
               ))}
             </div>
           ) : null}
@@ -255,8 +263,10 @@ export function ProjectsDashboardLoadingState() {
 }
 
 function ProjectDashboardCard({
+  canEditAsAdmin,
   project,
 }: {
+  canEditAsAdmin: boolean;
   project: ProjectSummary;
 }) {
   const totalTasks = getProjectTotalTaskCount(project.statuses);
@@ -264,6 +274,7 @@ function ProjectDashboardCard({
   const completion = getProjectCompletionPercentage(project.statuses);
   const leadStatus =
     project.statuses.find((status) => !status.isClosed) ?? project.statuses[0];
+  const canEditProject = project.role === "OWNER" || canEditAsAdmin;
 
   return (
     <article className="rounded-[1rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_3%,white),color-mix(in_oklab,var(--background)_95%,white)_42%,color-mix(in_oklab,var(--surface-subtle)_94%,white)_100%)] p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_22px_40px_-34px_rgba(15,23,42,0.42)] transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[0_24px_46px_-30px_rgba(15,23,42,0.46)]">
@@ -324,7 +335,18 @@ function ProjectDashboardCard({
           ))}
         </div>
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+        {canEditProject ? (
+          <ProjectEditorDialog
+            mode="edit"
+            project={project}
+            trigger={
+              <Button variant="outline" size="sm" className="rounded-xl">
+                Edit project
+              </Button>
+            }
+          />
+        ) : null}
         <Button asChild size="sm" className="rounded-xl">
           <Link href={getProjectPath(project.id) as Route}>
             Open board

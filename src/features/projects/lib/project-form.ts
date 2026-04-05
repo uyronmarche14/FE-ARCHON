@@ -1,32 +1,70 @@
 import type { ApiErrorDetails } from "@/contracts/api";
-import type { CreateProjectRequest } from "@/contracts/projects";
+import type {
+  CreateProjectRequest,
+  UpdateProjectRequest,
+} from "@/contracts/projects";
 
-export type CreateProjectFormValues = {
+export type ProjectFormValues = {
   name: string;
   description: string;
 };
 
-export type CreateProjectFormErrors = Partial<
-  Record<keyof CreateProjectFormValues, string>
->;
+export type ProjectFormErrors = Partial<Record<keyof ProjectFormValues, string>>;
 
-export function normalizeCreateProjectFormValues(
-  values: CreateProjectFormValues,
-): CreateProjectRequest {
+export type CreateProjectFormValues = ProjectFormValues;
+export type CreateProjectFormErrors = ProjectFormErrors;
+
+function normalizeProjectFormValues(values: ProjectFormValues) {
   const normalizedName = values.name.trim().replace(/\s+/g, " ");
   const normalizedDescription = values.description.trim();
 
   return {
     name: normalizedName,
-    ...(normalizedDescription ? { description: normalizedDescription } : {}),
+    description: normalizedDescription,
   };
 }
 
-export function validateCreateProjectFormValues(
-  values: CreateProjectFormValues,
-): CreateProjectFormErrors {
-  const normalizedValues = normalizeCreateProjectFormValues(values);
-  const errors: CreateProjectFormErrors = {};
+export function createProjectFormValues(
+  values?: Partial<{
+    description: string | null;
+    name: string;
+  }>,
+): ProjectFormValues {
+  return {
+    name: values?.name ?? "",
+    description: values?.description ?? "",
+  };
+}
+
+export function normalizeCreateProjectFormValues(
+  values: ProjectFormValues,
+): CreateProjectRequest {
+  const normalizedValues = normalizeProjectFormValues(values);
+
+  return {
+    name: normalizedValues.name,
+    ...(normalizedValues.description
+      ? { description: normalizedValues.description }
+      : {}),
+  };
+}
+
+export function normalizeUpdateProjectFormValues(
+  values: ProjectFormValues,
+): UpdateProjectRequest {
+  const normalizedValues = normalizeProjectFormValues(values);
+
+  return {
+    name: normalizedValues.name,
+    description: normalizedValues.description || null,
+  };
+}
+
+export function validateProjectFormValues(
+  values: ProjectFormValues,
+): ProjectFormErrors {
+  const normalizedValues = normalizeProjectFormValues(values);
+  const errors: ProjectFormErrors = {};
 
   if (!normalizedValues.name) {
     errors.name = "Project name is required.";
@@ -45,9 +83,15 @@ export function validateCreateProjectFormValues(
   return errors;
 }
 
+export function validateCreateProjectFormValues(
+  values: ProjectFormValues,
+): ProjectFormErrors {
+  return validateProjectFormValues(values);
+}
+
 export function mapProjectFormErrors(
   details?: ApiErrorDetails,
-): CreateProjectFormErrors {
+): ProjectFormErrors {
   if (!details) {
     return {};
   }

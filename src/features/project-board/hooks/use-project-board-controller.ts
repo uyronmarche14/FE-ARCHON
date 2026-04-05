@@ -196,6 +196,8 @@ export function useProjectBoardController(projectId: string) {
     activeDragTaskId !== null
       ? allTasks.find((task) => task.id === activeDragTaskId) ?? null
       : null;
+  const canEditProject =
+    currentProject?.role === "OWNER" || session?.user.role === "ADMIN";
   const canInviteMembers =
     currentProject?.role === "OWNER" || session?.user.role === "ADMIN";
   const canManageStatuses =
@@ -729,6 +731,8 @@ export function useProjectBoardController(projectId: string) {
     assigneeFilter,
     dueDateFilter,
     sortOrder,
+    currentProject,
+    canEditProject,
     canInviteMembers,
     canManageStatuses,
     drawerKey: drawerStateKey,

@@ -19,6 +19,7 @@ const getProjectDetailMock = vi.hoisted(() => vi.fn());
 const getProjectActivityMock = vi.hoisted(() => vi.fn());
 const getTaskLogsMock = vi.hoisted(() => vi.fn());
 const createTaskMock = vi.hoisted(() => vi.fn());
+const updateProjectMock = vi.hoisted(() => vi.fn());
 const updateTaskMock = vi.hoisted(() => vi.fn());
 const patchTaskStatusMock = vi.hoisted(() => vi.fn());
 const reorderProjectStatusesMock = vi.hoisted(() => vi.fn());
@@ -61,6 +62,9 @@ const dndMock = vi.hoisted(() => {
 const toastMocks = vi.hoisted(() => ({
   showSuccessToast: vi.fn(),
   showApiErrorToast: vi.fn(),
+}));
+const navigationState = vi.hoisted(() => ({
+  push: vi.fn(),
 }));
 
 vi.mock("@dnd-kit/core", async () => {
@@ -144,6 +148,100 @@ vi.mock("lucide-react", () => {
   };
 });
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => navigationState,
+}));
+
+vi.mock("@/components/ui/dialog", async () => {
+  const React = await import("react");
+
+  const DialogContext = React.createContext<{
+    open: boolean;
+    onOpenChange?: (open: boolean) => void;
+  } | null>(null);
+
+  function Dialog({
+    open,
+    onOpenChange,
+    children,
+  }: {
+    open: boolean;
+    onOpenChange?: (open: boolean) => void;
+    children: React.ReactNode;
+  }) {
+    return React.createElement(
+      DialogContext.Provider,
+      { value: { open, onOpenChange } },
+      children,
+    );
+  }
+
+  function DialogTrigger({
+    children,
+    asChild,
+  }: {
+    children: React.ReactElement;
+    asChild?: boolean;
+  }) {
+    const context = React.useContext(DialogContext);
+    const childElement = children as React.ReactElement<{
+      onClick?: (event: React.MouseEvent<HTMLElement>) => void;
+    }>;
+
+    if (asChild && React.isValidElement(children)) {
+      return React.cloneElement(childElement, {
+        onClick: (event: React.MouseEvent<HTMLElement>) => {
+          childElement.props.onClick?.(event);
+          context?.onOpenChange?.(true);
+        },
+      });
+    }
+
+    return React.createElement(
+      "button",
+      {
+        type: "button",
+        onClick: () => context?.onOpenChange?.(true),
+      },
+      children,
+    );
+  }
+
+  function DialogContent({ children }: { children: React.ReactNode }) {
+    const context = React.useContext(DialogContext);
+
+    return context?.open
+      ? React.createElement("div", null, children)
+      : null;
+  }
+
+  function DialogHeader({ children }: { children: React.ReactNode }) {
+    return React.createElement("div", null, children);
+  }
+
+  function DialogFooter({ children }: { children: React.ReactNode }) {
+    return React.createElement("div", null, children);
+  }
+
+  function DialogTitle({ children }: { children: React.ReactNode }) {
+    return React.createElement("h2", null, children);
+  }
+
+  function DialogDescription({ children }: { children: React.ReactNode }) {
+    return React.createElement("p", null, children);
+  }
+
+  return {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+  };
+});
+
 vi.mock("@/features/projects/services/get-projects", () => ({
   getProjects: getProjectsMock,
 }));
@@ -180,6 +278,10 @@ vi.mock("@/features/tasks/services/get-task-logs", () => ({
 
 vi.mock("@/features/tasks/services/create-task", () => ({
   createTask: createTaskMock,
+}));
+
+vi.mock("@/features/projects/services/update-project", () => ({
+  updateProject: updateProjectMock,
 }));
 
 vi.mock("@/features/tasks/services/update-task", () => ({
@@ -301,6 +403,15 @@ type TaskState = Array<{
 
 let taskState: TaskState = [];
 let statusOrder: Array<keyof typeof STATUS_DEFINITIONS> = [];
+let projectMetadataState: {
+  description: string | null;
+  name: string;
+  role: "OWNER" | "MEMBER";
+} = {
+  description: "Track the final validation work before release.",
+  name: "QA readiness",
+  role: "OWNER",
+};
 let taskLogState: Record<string, Array<{
   id: string;
   eventType: "TASK_CREATED" | "TASK_UPDATED" | "STATUS_CHANGED";
@@ -391,9 +502,9 @@ function createProjectStatusesFromState(tasks: TaskState) {
 function createProjectSummaryFromTasks(tasks: TaskState) {
   return {
     id: "qa-readiness",
-    name: "QA readiness",
-    description: "Track the final validation work before release.",
-    role: "OWNER" as const,
+    name: projectMetadataState.name,
+    description: projectMetadataState.description,
+    role: projectMetadataState.role,
     statuses: createProjectStatusesFromState(tasks).map((status) => ({
       id: status.id,
       name: status.name,
@@ -413,6 +524,11 @@ describe("ProjectBoardShell", () => {
   beforeEach(() => {
     setViewportWidth(1024);
     statusOrder = ["TODO", "IN_PROGRESS", "DONE"];
+    projectMetadataState = {
+      description: "Track the final validation work before release.",
+      name: "QA readiness",
+      role: "OWNER",
+    };
 
     taskState = [
       {
@@ -447,7 +563,9 @@ describe("ProjectBoardShell", () => {
     getProjectDetailMock.mockReset();
     getProjectActivityMock.mockReset();
     getTaskLogsMock.mockReset();
+    navigationState.push.mockReset();
     createTaskMock.mockReset();
+    updateProjectMock.mockReset();
     updateTaskMock.mockReset();
     patchTaskStatusMock.mockReset();
     reorderProjectStatusesMock.mockReset();
@@ -462,10 +580,10 @@ describe("ProjectBoardShell", () => {
     getProjectTasksMock.mockImplementation(async () => ({
       statuses: createProjectStatusesFromState(taskState),
     }));
-    getProjectDetailMock.mockResolvedValue({
+    getProjectDetailMock.mockImplementation(async () => ({
       id: "qa-readiness",
-      name: "QA readiness",
-      description: "Track the final validation work before release.",
+      name: projectMetadataState.name,
+      description: projectMetadataState.description,
       members: [
         {
           id: "member-1",
@@ -475,11 +593,11 @@ describe("ProjectBoardShell", () => {
         {
           id: "owner-1",
           name: "Ron Marchero",
-          role: "OWNER",
+          role: projectMetadataState.role,
         },
       ],
       statuses: createProjectStatusesFromState(taskState),
-    });
+    }));
     getTaskLogsMock.mockImplementation(async (taskId: string) => ({
       items: taskLogState[taskId] ?? [],
     }));
@@ -542,6 +660,25 @@ describe("ProjectBoardShell", () => {
         };
 
         return createdTask;
+      },
+    );
+    updateProjectMock.mockImplementation(
+      async (
+        projectId: string,
+        request: { description?: string | null; name?: string },
+      ) => {
+        expect(projectId).toBe("qa-readiness");
+
+        projectMetadataState = {
+          ...projectMetadataState,
+          name: request.name ?? projectMetadataState.name,
+          description:
+            request.description !== undefined
+              ? request.description
+              : projectMetadataState.description,
+        };
+
+        return createProjectSummaryFromTasks(taskState);
       },
     );
     updateTaskMock.mockImplementation(
@@ -754,6 +891,50 @@ describe("ProjectBoardShell", () => {
 
     expect(drawer).toBeInTheDocument();
     expect(drawer).toHaveClass("!w-[min(calc(100%-1rem),58rem)]");
+  });
+
+  it("updates project metadata from the board header without reloading the page", async () => {
+    renderBoard();
+
+    expect(await screen.findByText("QA readiness")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit project/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: /edit project/i }),
+    ).toBeInTheDocument();
+
+    const projectNameField = screen.getByLabelText("Project name");
+    const descriptionField = screen.getByLabelText("Description");
+
+    expect(projectNameField).toHaveValue("QA readiness");
+    expect(descriptionField).toHaveValue(
+      "Track the final validation work before release.",
+    );
+
+    fireEvent.change(projectNameField, {
+      target: { value: "  Release control center  " },
+    });
+    fireEvent.change(descriptionField, {
+      target: { value: "  Coordinate sign-off, launch checks, and handoff.  " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(updateProjectMock).toHaveBeenCalledWith("qa-readiness", {
+        name: "Release control center",
+        description: "Coordinate sign-off, launch checks, and handoff.",
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Release control center" }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("Coordinate sign-off, launch checks, and handoff."),
+    ).toBeInTheDocument();
   });
 
   it("shows resolved member names instead of raw assignee ids in the drawer preview", async () => {

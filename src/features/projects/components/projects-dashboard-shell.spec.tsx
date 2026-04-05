@@ -13,9 +13,23 @@ let projectsState: ProjectSummary[] = [];
 
 const getProjectsMock = vi.hoisted(() => vi.fn());
 const createProjectMock = vi.hoisted(() => vi.fn());
+const updateProjectMock = vi.hoisted(() => vi.fn());
 const toastMocks = vi.hoisted(() => ({
   showSuccessToast: vi.fn(),
   showApiErrorToast: vi.fn(),
+}));
+const authState = vi.hoisted(() => ({
+  session: {
+    accessToken: "token",
+    user: {
+      id: "member-1",
+      name: "Jordan Lane",
+      email: "jordan@example.com",
+      role: "MEMBER" as const,
+      emailVerifiedAt: "2026-04-01T00:00:00.000Z",
+    },
+  },
+  status: "authenticated" as const,
 }));
 
 vi.mock("lucide-react", () => {
@@ -151,6 +165,14 @@ vi.mock("@/features/projects/services/create-project", () => ({
   createProject: createProjectMock,
 }));
 
+vi.mock("@/features/projects/services/update-project", () => ({
+  updateProject: updateProjectMock,
+}));
+
+vi.mock("@/features/auth/providers/auth-session-provider", () => ({
+  useAuthSession: () => authState,
+}));
+
 vi.mock("@/lib/toast", () => toastMocks);
 
 function renderDashboard() {
@@ -190,8 +212,10 @@ describe("ProjectsDashboardShell", () => {
     navigationState.push.mockReset();
     getProjectsMock.mockReset();
     createProjectMock.mockReset();
+    updateProjectMock.mockReset();
     toastMocks.showSuccessToast.mockReset();
     toastMocks.showApiErrorToast.mockReset();
+    authState.session.user.role = "MEMBER";
   });
 
   it("renders a loading state before showing the simple dashboard cards", async () => {
@@ -348,6 +372,113 @@ describe("ProjectsDashboardShell", () => {
       "Project created",
       "The new workspace is ready for task planning.",
     );
+  });
+
+  it("lets owners edit project metadata from the dashboard card", async () => {
+    projectsState = [
+      createProjectSummary("launch-planning", "Launch planning", {
+        todo: 4,
+        inProgress: 2,
+        done: 5,
+        description: "Coordinate the release work across the team.",
+      }),
+    ];
+
+    getProjectsMock.mockImplementation(async () => ({
+      items: projectsState,
+    }));
+    updateProjectMock.mockImplementation(
+      async (
+        projectId: string,
+        request: { description?: string | null; name?: string },
+      ) => {
+        const currentProject = projectsState.find(
+          (project) => project.id === projectId,
+        );
+
+        if (!currentProject) {
+          throw new Error("Project not found");
+        }
+
+        const updatedProject: ProjectSummary = {
+          ...currentProject,
+          name: request.name ?? currentProject.name,
+          description:
+            request.description !== undefined
+              ? request.description
+              : currentProject.description,
+        };
+
+        projectsState = projectsState.map((project) =>
+          project.id === projectId ? updatedProject : project,
+        );
+
+        return updatedProject;
+      },
+    );
+
+    renderDashboard();
+
+    expect(await screen.findByText("Launch planning")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit project/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: /edit project/i }),
+    ).toBeInTheDocument();
+
+    const projectNameField = screen.getByLabelText("Project name");
+    const descriptionField = screen.getByLabelText("Description");
+
+    expect(projectNameField).toHaveValue("Launch planning");
+    expect(descriptionField).toHaveValue(
+      "Coordinate the release work across the team.",
+    );
+
+    fireEvent.change(projectNameField, {
+      target: { value: "  Release readiness  " },
+    });
+    fireEvent.change(descriptionField, {
+      target: { value: "  Track launch readiness and approvals.  " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(updateProjectMock).toHaveBeenCalledWith("launch-planning", {
+        name: "Release readiness",
+        description: "Track launch readiness and approvals.",
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Release readiness")).toBeInTheDocument();
+    });
+
+    expect(toastMocks.showSuccessToast).toHaveBeenCalledWith(
+      "Project updated",
+      "Project details are now in sync across the workspace.",
+    );
+  });
+
+  it("hides the edit action for member-only project access", async () => {
+    getProjectsMock.mockResolvedValueOnce({
+      items: [
+        createProjectSummary("qa-readiness", "QA readiness", {
+          todo: 1,
+          inProgress: 3,
+          done: 2,
+          description: "Track validation and smoke checks.",
+          role: "MEMBER",
+        }),
+      ],
+    });
+
+    renderDashboard();
+
+    expect(await screen.findByText("QA readiness")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /edit project/i }),
+    ).not.toBeInTheDocument();
   });
 });
 

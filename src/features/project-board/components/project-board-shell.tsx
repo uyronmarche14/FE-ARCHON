@@ -40,12 +40,14 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
   return (
     <section className="space-y-4">
       <ProjectBoardHeaderCard
+        canEditProject={board.canEditProject}
         canInviteMembers={board.canInviteMembers}
         canManageStatuses={board.canManageStatuses}
         firstStatusId={board.firstStatusId}
         metrics={board.metrics}
         onCreateTask={board.openCreateTask}
         onProjectStatusCreated={board.handleProjectStatusCreated}
+        project={board.currentProject}
         projectDescription={board.projectDescription}
         projectId={board.projectId}
         projectName={board.projectName}
