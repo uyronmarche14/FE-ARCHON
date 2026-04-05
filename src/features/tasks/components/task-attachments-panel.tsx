@@ -82,6 +82,9 @@ export function TaskAttachmentsPanel({
             <p className="text-sm leading-5 text-muted-foreground">
               Attach briefs, specs, and source links without leaving the drawer.
             </p>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Only attach resources your team trusts. External links always open in a new tab.
+            </p>
           </div>
           {attachments.length > 0 ? (
             <Badge variant="muted" size="xs">
@@ -196,6 +199,7 @@ export function TaskAttachmentsPanel({
             const canDeleteAttachment =
               session?.user.role === "ADMIN" ||
               session?.user.id === attachment.createdBy.id;
+            const destinationHost = getAttachmentHost(attachment.url);
 
             return (
               <li
@@ -214,10 +218,22 @@ export function TaskAttachmentsPanel({
                     <p className="mt-1 truncate text-xs text-muted-foreground">
                       {attachment.fileName}
                     </p>
+                    {destinationHost ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Destination: {destinationHost}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-1">
                     <Button type="button" variant="ghost" size="icon-sm" asChild>
-                      <a href={attachment.url} target="_blank" rel="noreferrer">
+                      <a
+                        href={attachment.url}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow"
+                        aria-label={`Open ${attachment.label ?? attachment.fileName}${
+                          destinationHost ? ` on ${destinationHost}` : ""
+                        }`}
+                      >
                         <ExternalLink className="size-4" />
                       </a>
                     </Button>
@@ -242,4 +258,12 @@ export function TaskAttachmentsPanel({
       ) : null}
     </section>
   );
+}
+
+function getAttachmentHost(url: string) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
 }
