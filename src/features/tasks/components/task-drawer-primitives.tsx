@@ -55,7 +55,7 @@ export function TaskDetailSurface({
   return (
     <div
       className={cn(
-        "rounded-[0.95rem] bg-background/88 px-3 py-2.5 ring-1 ring-border/35",
+        "rounded-[0.95rem] bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_2%,white),color-mix(in_oklab,var(--background)_93%,white))] px-3 py-2.5 ring-1 ring-border/55 shadow-[0_14px_24px_-26px_rgba(15,23,42,0.34)]",
         className,
       )}
     >
@@ -72,7 +72,7 @@ export function TaskCompactRailPanel({
   title: string;
 }) {
   return (
-    <section className="space-y-2 rounded-[0.95rem] bg-surface-subtle/35 px-3 py-3 ring-1 ring-border/35">
+    <section className="space-y-2 rounded-[0.95rem] bg-[linear-gradient(180deg,color-mix(in_oklab,var(--primary)_3%,white),color-mix(in_oklab,var(--surface-subtle)_95%,white))] px-3 py-3 ring-1 ring-border/55 shadow-[0_14px_24px_-26px_rgba(15,23,42,0.34)]">
       <p className="text-[0.7rem] font-medium uppercase tracking-[0.22em] text-muted-foreground/80">
         {title}
       </p>
@@ -98,7 +98,7 @@ export function TaskRailField({
 
 export function TaskCompactValue({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-[0.9rem] bg-background/88 px-3 py-2.5 ring-1 ring-border/35">
+    <div className="rounded-[0.9rem] bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_2%,white),color-mix(in_oklab,var(--background)_93%,white))] px-3 py-2.5 ring-1 ring-border/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
       <p className="text-sm text-foreground/88">{children}</p>
     </div>
   );
@@ -121,7 +121,7 @@ export function CompactTaskSelect({
     <div className="min-w-0">
       <Select
         aria-label={ariaLabel}
-        className="h-9 rounded-[0.9rem] border-border/35 bg-background/88 shadow-none"
+        className="h-9 rounded-[0.9rem] border-border/55 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_2%,white),color-mix(in_oklab,var(--background)_93%,white))] shadow-none"
         value={value}
         onChange={onChange}
         disabled={disabled}

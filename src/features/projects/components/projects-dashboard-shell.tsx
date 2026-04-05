@@ -18,7 +18,12 @@ import {
   getProjectOpenTaskCount,
   getProjectTotalTaskCount,
 } from "@/features/projects/lib/project-summary";
+import {
+  getTaskStatusBadgeClassName,
+  getTaskStatusSurfaceClassName,
+} from "@/features/tasks/lib/task-board";
 import type { ProjectSummary } from "@/contracts/projects";
+import { cn } from "@/lib/utils";
 
 export function ProjectsDashboardShell() {
   const projectsQuery = useProjects();
@@ -50,8 +55,8 @@ export function ProjectsDashboardShell() {
 
   return (
     <section className="space-y-5">
-      <Card className="overflow-hidden border-border/70 bg-card/98">
-        <CardContent className="space-y-4 bg-linear-to-b from-background via-background to-surface-subtle/45 px-4 py-4 sm:px-5 sm:py-5">
+      <Card className="overflow-hidden border-border/80 bg-card/98">
+        <CardContent className="space-y-4 bg-[linear-gradient(180deg,color-mix(in_oklab,var(--primary)_4%,white)_0%,color-mix(in_oklab,var(--background)_96%,white)_44%,color-mix(in_oklab,var(--surface-subtle)_95%,white)_100%)] px-4 py-4 sm:px-5 sm:py-5">
           <WorkspaceSectionHeader
             badge={
               <div className="flex flex-wrap items-center gap-2">
@@ -102,7 +107,7 @@ export function ProjectsDashboardShell() {
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden border-border/70 bg-card/98">
+      <Card className="overflow-hidden border-border/80 bg-card/98">
         <CardContent className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-1.5">
@@ -128,7 +133,7 @@ export function ProjectsDashboardShell() {
           {projectsQuery.isPending ? <ProjectsDashboardLoadingState /> : null}
 
           {!projectsQuery.isPending && projectsQuery.isError ? (
-            <Card className="border-border/70 bg-surface-subtle/60 shadow-none">
+            <Card className="border-border/80 bg-[linear-gradient(180deg,color-mix(in_oklab,var(--primary)_3%,white),color-mix(in_oklab,var(--surface-subtle)_95%,white))] shadow-none">
               <CardContent className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-base font-semibold">
@@ -156,7 +161,7 @@ export function ProjectsDashboardShell() {
           {!projectsQuery.isPending &&
           !projectsQuery.isError &&
           projects.length === 0 ? (
-            <Card className="border-dashed border-border/80 bg-surface-subtle/50 shadow-none">
+            <Card className="border-dashed border-border/85 bg-[linear-gradient(180deg,color-mix(in_oklab,var(--primary)_4%,white),color-mix(in_oklab,var(--surface-subtle)_96%,white))] shadow-none">
               <CardContent className="px-5 py-8 text-center">
                 <div className="mx-auto grid size-12 place-items-center rounded-[1.1rem] bg-primary/10 text-primary">
                   <FolderKanban className="size-5" />
@@ -206,7 +211,7 @@ function DashboardMetricTile({
   value: number | string;
 }) {
   return (
-    <div className="rounded-[1rem] border border-border/70 bg-card/90 px-4 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+    <div className="rounded-[1rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_3%,white),color-mix(in_oklab,var(--card)_94%,white))] px-4 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_28px_-26px_rgba(15,23,42,0.35)]">
       <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
         {label}
       </p>
@@ -222,7 +227,7 @@ export function ProjectsDashboardLoadingState() {
       {Array.from({ length: 6 }).map((_, index) => (
         <div
           key={index}
-          className="rounded-[1rem] border border-border/70 bg-card p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+          className="rounded-[1rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_3%,white),color-mix(in_oklab,var(--card)_94%,white))] p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_28px_-26px_rgba(15,23,42,0.35)]"
         >
           <div className="flex items-start gap-3">
             <Skeleton className="size-9 rounded-[0.95rem]" />
@@ -257,11 +262,20 @@ function ProjectDashboardCard({
   const totalTasks = getProjectTotalTaskCount(project.statuses);
   const openTasks = getProjectOpenTaskCount(project.statuses);
   const completion = getProjectCompletionPercentage(project.statuses);
+  const leadStatus =
+    project.statuses.find((status) => !status.isClosed) ?? project.statuses[0];
 
   return (
-    <article className="rounded-[1rem] border border-border/75 bg-linear-to-br from-background via-background to-surface-subtle/55 p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+    <article className="rounded-[1rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_3%,white),color-mix(in_oklab,var(--background)_95%,white)_42%,color-mix(in_oklab,var(--surface-subtle)_94%,white)_100%)] p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_22px_40px_-34px_rgba(15,23,42,0.42)] transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[0_24px_46px_-30px_rgba(15,23,42,0.46)]">
       <div className="flex items-start gap-3">
-        <div className="grid size-10 shrink-0 place-items-center rounded-[0.95rem] border border-primary/10 bg-primary/[0.08] text-xs font-semibold text-primary">
+        <div
+          className={cn(
+            "grid size-10 shrink-0 place-items-center rounded-[0.95rem] text-xs font-semibold shadow-[0_14px_24px_-22px_rgba(15,23,42,0.42)]",
+            leadStatus
+              ? getTaskStatusSurfaceClassName(leadStatus)
+              : "border border-primary/10 bg-primary/[0.08] text-primary",
+          )}
+        >
           {getProjectInitials(project.name)}
         </div>
 
@@ -297,13 +311,18 @@ function ProjectDashboardCard({
         />
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {project.statuses.map((status) => (
-          <Badge key={status.id} variant={getStatusBadgeVariant(status)} size="xs">
-            {status.name} {status.taskCount}
-          </Badge>
-        ))}
-      </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {project.statuses.map((status) => (
+            <Badge
+              key={status.id}
+              variant="outline"
+              size="xs"
+              className={getTaskStatusBadgeClassName(status)}
+            >
+              {status.name} {status.taskCount}
+            </Badge>
+          ))}
+        </div>
 
       <div className="mt-4 flex justify-end">
         <Button asChild size="sm" className="rounded-xl">
@@ -325,7 +344,7 @@ function ProjectCardMetric({
   value: number | string;
 }) {
   return (
-    <div className="rounded-[0.95rem] border border-border/70 bg-card/85 px-3 py-2">
+    <div className="rounded-[0.95rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_3%,white),color-mix(in_oklab,var(--card)_93%,white))] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
       <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
         {label}
       </p>
@@ -339,23 +358,4 @@ function getProjectCompletionCount(project: ProjectSummary) {
     (total, status) => total + (status.isClosed ? status.taskCount : 0),
     0,
   );
-}
-
-function getStatusBadgeVariant(status: ProjectSummary["statuses"][number]) {
-  if (status.isClosed) {
-    return "done" as const;
-  }
-
-  const normalizedName = status.name.trim().toLowerCase();
-
-  if (
-    normalizedName.includes("progress") ||
-    normalizedName.includes("doing") ||
-    normalizedName.includes("active") ||
-    normalizedName.includes("review")
-  ) {
-    return "progress" as const;
-  }
-
-  return "todo" as const;
 }

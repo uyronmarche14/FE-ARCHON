@@ -846,6 +846,14 @@ describe("ProjectBoardShell", () => {
       await screen.findByLabelText("Search project activity"),
     ).toBeInTheDocument();
     expect(
+      screen.getByRole("button", {
+        name: /filter project activity by event type/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("project-activity-table"),
+    ).toBeInTheDocument();
+    expect(
       await screen.findByText("Member User moved the task from Todo to In Progress"),
     ).toBeInTheDocument();
     expect(getProjectActivityMock).toHaveBeenCalledWith("qa-readiness", {
@@ -860,6 +868,47 @@ describe("ProjectBoardShell", () => {
       ),
     ).not.toBeInTheDocument();
     expect(screen.queryByTestId("board-lanes-scroll-area")).not.toBeInTheDocument();
+  });
+
+  it("opens the task drawer from a desktop project activity row", async () => {
+    getProjectActivityMock.mockResolvedValueOnce({
+      items: [
+        {
+          id: "activity-1",
+          eventType: "STATUS_CHANGED",
+          fieldName: "status",
+          oldValue: "TODO",
+          newValue: "IN_PROGRESS",
+          summary: "Member User moved the task from Todo to In Progress",
+          actor: {
+            id: "member-1",
+            name: "Member User",
+          },
+          createdAt: "2026-04-06T09:00:00.000Z",
+          task: {
+            id: "task-api-envelope",
+            title: "Draft API envelope",
+            statusId: STATUS_DEFINITIONS.IN_PROGRESS.id,
+            statusName: STATUS_DEFINITIONS.IN_PROGRESS.name,
+            isClosed: STATUS_DEFINITIONS.IN_PROGRESS.isClosed,
+          },
+        },
+      ],
+      page: 1,
+      pageSize: 10,
+      hasMore: false,
+    });
+
+    renderBoard();
+
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
+    fireEvent.click(await screen.findByTestId("project-activity-row-activity-1"));
+
+    expect(
+      await screen.findByRole("dialog", { name: /draft api envelope/i }),
+    ).toBeInTheDocument();
   });
 
   it("moves a task across lanes optimistically and calls the status patch endpoint", async () => {
@@ -1477,5 +1526,48 @@ describe("ProjectBoardShell", () => {
     expect(
       screen.queryByRole("button", { name: /reorder todo lane/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps project activity in stacked cards on mobile", async () => {
+    setViewportWidth(480);
+    getProjectActivityMock.mockResolvedValueOnce({
+      items: [
+        {
+          id: "activity-1",
+          eventType: "TASK_UPDATED",
+          fieldName: "title",
+          oldValue: "Draft API envelope",
+          newValue: "Draft API envelope v2",
+          summary: "Member User updated the title",
+          actor: {
+            id: "member-1",
+            name: "Member User",
+          },
+          createdAt: "2026-04-06T09:00:00.000Z",
+          task: {
+            id: "task-api-envelope",
+            title: "Draft API envelope",
+            statusId: STATUS_DEFINITIONS.TODO.id,
+            statusName: STATUS_DEFINITIONS.TODO.name,
+            isClosed: STATUS_DEFINITIONS.TODO.isClosed,
+          },
+        },
+      ],
+      page: 1,
+      pageSize: 10,
+      hasMore: false,
+    });
+
+    renderBoard();
+
+    expect(await findTaskOpenButton("Draft API envelope")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
+
+    expect(
+      await screen.findByTestId("project-activity-mobile-list"),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("project-activity-table")).not.toBeInTheDocument();
+    expect(await screen.findByText("Member User updated the title")).toBeInTheDocument();
   });
 });

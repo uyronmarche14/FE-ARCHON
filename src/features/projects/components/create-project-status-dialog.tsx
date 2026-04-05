@@ -21,6 +21,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { useCreateProjectStatus } from "@/features/projects/hooks/use-create-project-status";
+import {
+  getTaskStatusBadgeClassName,
+  getTaskStatusSurfaceClassName,
+} from "@/features/tasks/lib/task-board";
+import { cn } from "@/lib/utils";
 import { showApiErrorToast } from "@/lib/toast";
 import { isApiClientError } from "@/services/http/api-client-error";
 
@@ -40,6 +45,10 @@ export function CreateProjectStatusDialog({
   const [color, setColor] = useState<ProjectStatusColor>("BLUE");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const previewStatus = {
+    color,
+    isClosed: type === "CLOSED",
+  };
 
   function resetForm() {
     setName("");
@@ -111,13 +120,13 @@ export function CreateProjectStatusDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="rounded-md">
+        <Button type="button" variant="outline" size="sm" className="rounded-xl">
           <Layers3 className="size-4" />
           Add status
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg border-border/80 bg-card/98 shadow-[0_24px_60px_-34px_rgba(15,23,42,0.48)]">
         <DialogHeader className="border-b border-border/60 pb-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" size="xs">
@@ -134,7 +143,7 @@ export function CreateProjectStatusDialog({
         </DialogHeader>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
-          <section className="grid gap-4 rounded-[1.1rem] border border-border/70 bg-surface-subtle/55 px-4 py-4">
+          <section className="grid gap-4 rounded-[1.1rem] border border-border/80 bg-[linear-gradient(180deg,color-mix(in_oklab,var(--primary)_3%,white),color-mix(in_oklab,var(--surface-subtle)_94%,white))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
             <div className="space-y-1">
               <Label htmlFor="status-name">Status name</Label>
               <p className="text-xs leading-5 text-muted-foreground">
@@ -163,7 +172,7 @@ export function CreateProjectStatusDialog({
             </div>
           </section>
 
-          <section className="grid gap-4 rounded-[1.1rem] border border-border/70 bg-card px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <section className="grid gap-4 rounded-[1.1rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_2%,white),color-mix(in_oklab,var(--card)_94%,white))] px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_28px_-28px_rgba(15,23,42,0.34)]">
             <div className="space-y-1">
               <Label htmlFor="status-type">Workflow meaning</Label>
               <p className="text-xs leading-5 text-muted-foreground">
@@ -191,7 +200,7 @@ export function CreateProjectStatusDialog({
             </Select>
           </section>
 
-          <section className="grid gap-4 rounded-[1.1rem] border border-border/70 bg-card px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <section className="grid gap-4 rounded-[1.1rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_2%,white),color-mix(in_oklab,var(--card)_94%,white))] px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_28px_-28px_rgba(15,23,42,0.34)]">
             <div className="space-y-1">
               <Label htmlFor="status-color">Status color</Label>
               <p className="text-xs leading-5 text-muted-foreground">
@@ -213,6 +222,31 @@ export function CreateProjectStatusDialog({
               <option value="RED">Red</option>
               <option value="PURPLE">Purple</option>
             </Select>
+
+            <div
+              className={cn(
+                "rounded-[1rem] px-3.5 py-3 shadow-[0_14px_26px_-24px_rgba(15,23,42,0.34)]",
+                getTaskStatusSurfaceClassName(previewStatus),
+              )}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-[0.7rem] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
+                    Board preview
+                  </p>
+                  <p className="text-sm text-foreground">
+                    Lane headers and task cards will pick up this accent.
+                  </p>
+                </div>
+                <Badge
+                  variant="outline"
+                  size="xs"
+                  className={getTaskStatusBadgeClassName(previewStatus)}
+                >
+                  {name.trim() || "Preview"} {type === "CLOSED" ? "Done" : "Open"}
+                </Badge>
+              </div>
+            </div>
           </section>
 
           {formError ? (
@@ -225,12 +259,17 @@ export function CreateProjectStatusDialog({
             <Button
               type="button"
               variant="outline"
+              className="rounded-xl"
               onClick={() => setOpen(false)}
               disabled={createProjectStatusMutation.isPending}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={createProjectStatusMutation.isPending}>
+            <Button
+              type="submit"
+              className="rounded-xl"
+              disabled={createProjectStatusMutation.isPending}
+            >
               {createProjectStatusMutation.isPending ? (
                 <>
                   <LoaderCircle className="size-3.5 animate-spin" />

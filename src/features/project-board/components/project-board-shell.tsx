@@ -118,6 +118,7 @@ export function ProjectBoardShell({ projectId }: ProjectBoardShellProps) {
             eventType={board.activityEventType}
             searchQuery={board.activitySearchQuery}
             onEventTypeChange={board.setActivityEventType}
+            onOpenTask={board.openTaskById}
             onSearchQueryChange={board.setActivitySearchQuery}
           />
         </TabsContent>

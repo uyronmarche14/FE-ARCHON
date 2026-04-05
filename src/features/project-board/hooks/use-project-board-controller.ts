@@ -661,6 +661,16 @@ export function useProjectBoardController(projectId: string) {
     });
   }
 
+  function openTaskById(taskId: string) {
+    const task = allTasks.find((entry) => entry.id === taskId);
+
+    if (!task) {
+      return;
+    }
+
+    openTask(task);
+  }
+
   function openCreateTask(statusId: string) {
     if (!statusId) {
       return;
@@ -747,6 +757,7 @@ export function useProjectBoardController(projectId: string) {
     handleDragCancel,
     handleDragEnd,
     openTask,
+    openTaskById,
     openCreateTask,
     handleDrawerOpenChange,
     handleDrawerModeChange,

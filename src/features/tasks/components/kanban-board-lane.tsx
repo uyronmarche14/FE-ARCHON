@@ -125,7 +125,7 @@ export function KanbanBoardLane({
       bodyClassName={cn("min-h-[12rem]", isOver && "bg-primary/5")}
     >
       {lane.tasks.length === 0 ? (
-        <BoardLaneEmptyState lane={lane.title} />
+        <BoardLaneEmptyState lane={lane.title} status={lane.status} />
       ) : (
         lane.tasks.map((task) => (
           <DraggableTaskCard

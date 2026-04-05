@@ -24,7 +24,12 @@ import { useDeleteProjectStatus } from "@/features/projects/hooks/use-delete-pro
 import { useReorderProjectStatuses } from "@/features/projects/hooks/use-reorder-project-statuses";
 import { useUpdateProjectStatus } from "@/features/projects/hooks/use-update-project-status";
 import { projectDetailQueryKey, projectsQueryKey } from "@/features/projects/lib/project-query-keys";
+import {
+  getTaskStatusBadgeClassName,
+  getTaskStatusSurfaceClassName,
+} from "@/features/tasks/lib/task-board";
 import { projectTasksQueryKey } from "@/features/tasks/lib/task-query-keys";
+import { cn } from "@/lib/utils";
 import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
 
 type ManageProjectStatusesDialogProps = {
@@ -182,13 +187,13 @@ export function ManageProjectStatusesDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="rounded-md">
+        <Button type="button" variant="outline" size="sm" className="rounded-xl">
           <Layers3 className="size-4" />
           Manage statuses
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl border-border/80 bg-card/98 shadow-[0_28px_68px_-36px_rgba(15,23,42,0.5)]">
         <DialogHeader className="border-b border-border/60 pb-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" size="xs">
@@ -208,8 +213,24 @@ export function ManageProjectStatusesDialog({
           {orderedDrafts.map((draft, index) => (
             <section
               key={draft.id}
-              className="grid gap-3 rounded-[1rem] border border-border/70 bg-card px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+              className={cn(
+                "grid gap-3 rounded-[1rem] px-4 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_32px_-28px_rgba(15,23,42,0.38)]",
+                getTaskStatusSurfaceClassName(draft),
+              )}
             >
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="outline"
+                  size="xs"
+                  className={getTaskStatusBadgeClassName(draft)}
+                >
+                  {draft.name.trim() || "Untitled status"}
+                </Badge>
+                <Badge variant="muted" size="xs">
+                  {draft.isClosed ? "Completed stage" : "Open stage"}
+                </Badge>
+              </div>
+
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_11rem_11rem_auto] lg:items-end">
                 <div className="space-y-1.5">
                   <Label htmlFor={`status-name-${draft.id}`}>Name</Label>
@@ -288,6 +309,7 @@ export function ManageProjectStatusesDialog({
                     type="button"
                     variant="outline"
                     size="icon-sm"
+                    className="rounded-xl"
                     onClick={() => {
                       void handleMoveStatus(draft.id, -1);
                     }}
@@ -299,6 +321,7 @@ export function ManageProjectStatusesDialog({
                     type="button"
                     variant="outline"
                     size="icon-sm"
+                    className="rounded-xl"
                     onClick={() => {
                       void handleMoveStatus(draft.id, 1);
                     }}
@@ -309,6 +332,7 @@ export function ManageProjectStatusesDialog({
                   <Button
                     type="button"
                     size="sm"
+                    className="rounded-xl"
                     onClick={() => {
                       void handleSaveDraft(draft);
                     }}
@@ -329,7 +353,7 @@ export function ManageProjectStatusesDialog({
                 </div>
               </div>
 
-              <div className="grid gap-3 rounded-[0.95rem] border border-border/70 bg-surface-subtle/50 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_12rem_auto] lg:items-end">
+              <div className="grid gap-3 rounded-[0.95rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--background)_92%,white),color-mix(in_oklab,var(--surface-subtle)_96%,white))] px-3 py-3 lg:grid-cols-[minmax(0,1fr)_12rem_auto] lg:items-end">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-foreground">Delete status</p>
                   <p className="text-xs leading-5 text-muted-foreground">
@@ -369,6 +393,7 @@ export function ManageProjectStatusesDialog({
                     type="button"
                     variant="destructive"
                     size="sm"
+                    className="rounded-xl"
                     onClick={() => {
                       void handleDeleteStatus(draft);
                     }}

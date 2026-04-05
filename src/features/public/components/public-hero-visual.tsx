@@ -123,6 +123,7 @@ export function PublicHeroVisual() {
 
           <BoardContainer
             density="compact"
+            tone="default"
             desktopChildren={lanes.map((lane) => (
               <BoardColumn
                 key={lane.status.id}
@@ -130,19 +131,25 @@ export function PublicHeroVisual() {
                 density="compact"
                 description={lane.description}
                 onAddTask={() => undefined}
+                tone="default"
                 showActions={false}
                 status={lane.status}
                 title={lane.title}
               >
                 {lane.tasks.length === 0 ? (
-                  <BoardLaneEmptyState lane={lane.title} />
+                  <BoardLaneEmptyState lane={lane.title} tone="default" />
                 ) : (
                   lane.tasks.map((task) => (
                     <div
                       key={task.id}
                       className="[&>article]:cursor-default [&>article]:hover:translate-y-0"
                     >
-                      <TaskCard density="compact" task={task} memberLookup={memberLookup} />
+                      <TaskCard
+                        density="compact"
+                        task={task}
+                        memberLookup={memberLookup}
+                        tone="default"
+                      />
                     </div>
                   ))
                 )}
@@ -156,19 +163,25 @@ export function PublicHeroVisual() {
                 description={lane.description}
                 onAddTask={() => undefined}
                 presentation="mobile"
+                tone="default"
                 showActions={false}
                 status={lane.status}
                 title={lane.title}
               >
                 {lane.tasks.length === 0 ? (
-                  <BoardLaneEmptyState lane={lane.title} />
+                  <BoardLaneEmptyState lane={lane.title} tone="default" />
                 ) : (
                   lane.tasks.map((task) => (
                     <div
                       key={task.id}
                       className="[&>article]:cursor-default [&>article]:hover:translate-y-0"
                     >
-                      <TaskCard density="compact" task={task} memberLookup={memberLookup} />
+                      <TaskCard
+                        density="compact"
+                        task={task}
+                        memberLookup={memberLookup}
+                        tone="default"
+                      />
                     </div>
                   ))
                 )}
@@ -200,7 +213,12 @@ export function PublicHeroVisual() {
               </div>
             ) : (
               visibleActivityEntries.map((entry) => (
-                <TaskActivityEntry key={entry.id} density="compact" entry={entry} />
+                <TaskActivityEntry
+                  key={entry.id}
+                  density="compact"
+                  entry={entry}
+                  tone="default"
+                />
               ))
             )}
           </div>

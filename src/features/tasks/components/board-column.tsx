@@ -4,7 +4,10 @@ import { MoreHorizontal, Plus } from "lucide-react";
 import type { TaskStatus } from "@/contracts/tasks";
 import { Button } from "@/components/ui/button";
 import {
+  getTaskStatusBadgeClassName,
   getTaskStatusDotClassName,
+  getTaskStatusEmptyStateClassName,
+  getTaskStatusHeaderClassName,
   getTaskStatusSurfaceClassName,
 } from "@/features/tasks/lib/task-board";
 import { cn } from "@/lib/utils";
@@ -27,6 +30,7 @@ type BoardColumnProps = {
   showActions?: boolean;
   status: TaskStatus;
   title: string;
+  tone?: "default" | "workspace";
 };
 
 export const BoardColumn = React.forwardRef<HTMLElement, BoardColumnProps>(
@@ -49,6 +53,7 @@ export const BoardColumn = React.forwardRef<HTMLElement, BoardColumnProps>(
       showActions = true,
       status,
       title,
+      tone = "workspace",
     },
     ref,
   ) => {
@@ -58,7 +63,9 @@ export const BoardColumn = React.forwardRef<HTMLElement, BoardColumnProps>(
         style={surfaceStyle}
         data-testid={dataTestId}
         className={cn(
-          "min-w-0 overflow-hidden rounded-[1.2rem] border shadow-[0_1px_2px_rgba(15,23,42,0.04)] transform-gpu transition-shadow",
+          tone === "workspace"
+            ? "min-w-0 overflow-hidden rounded-[1.2rem] border shadow-[0_1px_2px_rgba(15,23,42,0.05),0_18px_38px_-30px_rgba(15,23,42,0.5)] transform-gpu transition-[box-shadow,border-color]"
+            : "min-w-0 overflow-hidden rounded-[1.2rem] border shadow-[0_1px_2px_rgba(15,23,42,0.04)] transform-gpu transition-shadow",
           presentation === "desktop"
             ? density === "compact"
               ? "w-[18.5rem] shrink-0 rounded-[1rem]"
@@ -80,8 +87,11 @@ export const BoardColumn = React.forwardRef<HTMLElement, BoardColumnProps>(
           showActions={showActions}
           status={status}
           title={title}
+          tone={tone}
         />
-        <BoardLaneBody className={bodyClassName}>{children}</BoardLaneBody>
+        <BoardLaneBody className={bodyClassName} status={status} tone={tone}>
+          {children}
+        </BoardLaneBody>
       </section>
     );
   },
@@ -98,6 +108,7 @@ type BoardColumnHeaderProps = {
   showActions: boolean;
   status: TaskStatus;
   title: string;
+  tone: "default" | "workspace";
 };
 
 export function BoardColumnHeader({
@@ -109,12 +120,16 @@ export function BoardColumnHeader({
   showActions,
   status,
   title,
+  tone,
 }: BoardColumnHeaderProps) {
   return (
     <header
       className={cn(
-        "sticky top-0 z-10 border-b border-black/5 bg-white/75 backdrop-blur supports-[backdrop-filter]:bg-white/65",
+        tone === "workspace"
+          ? "sticky top-0 z-10 border-b backdrop-blur-xl"
+          : "sticky top-0 z-10 border-b border-black/5 bg-white/75 backdrop-blur supports-[backdrop-filter]:bg-white/65",
         density === "compact" ? "px-3 py-2.5" : "px-3.5 py-3",
+        tone === "workspace" && getTaskStatusHeaderClassName(status),
       )}
     >
       <div
@@ -139,7 +154,14 @@ export function BoardColumnHeader({
             >
               {title}
             </h3>
-            <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+            <span
+              className={cn(
+                tone === "workspace"
+                  ? "rounded-full px-2 py-0.5 text-[11px] font-semibold shadow-[0_12px_24px_-22px_rgba(15,23,42,0.42)]"
+                  : "rounded-full bg-surface-subtle px-2 py-0.5 text-[11px] font-semibold text-muted-foreground",
+                tone === "workspace" && getTaskStatusBadgeClassName(status),
+              )}
+            >
               {count}
             </span>
           </div>
@@ -193,11 +215,19 @@ export function BoardColumnHeader({
 export function BoardLaneBody({
   children,
   className,
-}: ComponentProps<"div">) {
+  status,
+  tone = "workspace",
+}: ComponentProps<"div"> & {
+  status?: TaskStatus;
+  tone?: "default" | "workspace";
+}) {
   return (
     <div
       className={cn(
-        "grid content-start gap-2.5 bg-linear-to-b from-background to-surface-subtle/35 p-3 [&>*]:w-full",
+        tone === "workspace"
+          ? "grid content-start gap-2.5 p-3 [&>*]:w-full"
+          : "grid content-start gap-2.5 bg-linear-to-b from-background to-surface-subtle/35 p-3 [&>*]:w-full",
+        tone === "workspace" && status && getTaskStatusSurfaceClassName(status),
         className,
       )}
     >
@@ -206,9 +236,24 @@ export function BoardLaneBody({
   );
 }
 
-export function BoardLaneEmptyState({ lane }: { lane: string }) {
+export function BoardLaneEmptyState({
+  lane,
+  status,
+  tone = "workspace",
+}: {
+  lane: string;
+  status?: TaskStatus;
+  tone?: "default" | "workspace";
+}) {
   return (
-    <div className="rounded-[1rem] border border-dashed border-border/70 bg-surface-subtle/35 px-4 py-6 text-center">
+    <div
+      className={cn(
+        tone === "workspace"
+          ? "rounded-[1rem] border border-dashed px-4 py-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]"
+          : "rounded-[1rem] border border-dashed border-border/70 bg-surface-subtle/35 px-4 py-6 text-center",
+        tone === "workspace" && status && getTaskStatusEmptyStateClassName(status),
+      )}
+    >
       <p className="text-sm font-semibold text-foreground">No cards in {lane}.</p>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
         This lane will fill automatically when tasks arrive for this workflow state.

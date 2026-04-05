@@ -22,6 +22,7 @@ type TaskCardProps = {
   memberLookup?: TaskMemberLookup;
   onOpen?: () => void;
   task: TaskCardData;
+  tone?: "default" | "workspace";
 };
 
 export function TaskCard({
@@ -31,6 +32,7 @@ export function TaskCard({
   memberLookup,
   onOpen,
   task,
+  tone = "workspace",
 }: TaskCardProps) {
   const assigneeLabel = getTaskAssigneeLabel(task.assigneeId, memberLookup);
   const assigneeInitials = getTaskAssigneeInitials(task.assigneeId, memberLookup);
@@ -38,12 +40,17 @@ export function TaskCard({
   return (
     <article
       className={cn(
-        "grid h-full cursor-grab grid-rows-[auto_1fr_auto] border shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[transform,border-color,box-shadow,background-color,opacity] duration-150 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)] active:cursor-grabbing",
+        tone === "workspace"
+          ? "grid h-full cursor-grab grid-rows-[auto_1fr_auto] border shadow-[0_1px_2px_rgba(15,23,42,0.05),0_20px_42px_-34px_rgba(15,23,42,0.42)] transition-[transform,border-color,box-shadow,background-color,opacity] duration-150 hover:-translate-y-0.5 hover:shadow-[0_26px_52px_-34px_rgba(15,23,42,0.48)] active:cursor-grabbing"
+          : "grid h-full cursor-grab grid-rows-[auto_1fr_auto] border shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[transform,border-color,box-shadow,background-color,opacity] duration-150 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)] active:cursor-grabbing",
         density === "compact"
           ? "min-h-[9.6rem] gap-2.5 rounded-[0.9rem] px-2.5 py-2.5"
           : "min-h-[11.25rem] gap-3 rounded-[0.95rem] px-3 py-3",
         getTaskStatusCardClassName(task.status),
-        isDragging && "opacity-75 shadow-[0_20px_40px_rgba(15,23,42,0.12)]",
+        isDragging &&
+          (tone === "workspace"
+            ? "opacity-75 shadow-[0_28px_56px_-28px_rgba(15,23,42,0.6)]"
+            : "opacity-75 shadow-[0_20px_40px_rgba(15,23,42,0.12)]"),
       )}
     >
       <header
@@ -65,7 +72,11 @@ export function TaskCard({
           <Badge
             variant="outline"
             size="xs"
-            className="bg-background/90 font-medium"
+            className={
+              tone === "workspace"
+                ? "border-border/75 bg-background/82 font-medium text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
+                : "bg-background/90 font-medium"
+            }
           >
             {getTaskDueLabel(task.dueDate)}
           </Badge>
@@ -82,7 +93,9 @@ export function TaskCard({
             role="img"
             aria-label={`Assignee ${assigneeLabel}`}
             className={cn(
-              "grid place-items-center border border-border/70 bg-card font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+              tone === "workspace"
+                ? "grid place-items-center border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_4%,white),color-mix(in_oklab,var(--card)_92%,white))] font-semibold text-foreground shadow-[0_10px_22px_-20px_rgba(15,23,42,0.42)]"
+                : "grid place-items-center border border-border/70 bg-card font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
               density === "compact"
                 ? "size-7 rounded-[0.75rem] text-[9px]"
                 : "size-8 rounded-[0.85rem] text-[10px]",
@@ -124,7 +137,9 @@ export function TaskCard({
 
       <footer
         className={cn(
-          "grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 border-t border-border/60",
+          tone === "workspace"
+            ? "grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 border-t border-border/75"
+            : "grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 border-t border-border/60",
           density === "compact" ? "pt-1.5" : "pt-2",
         )}
       >
@@ -150,7 +165,11 @@ export function TaskCard({
         <Badge
           variant="outline"
           size="xs"
-          className="shrink-0 bg-background/90 font-medium text-muted-foreground"
+          className={
+            tone === "workspace"
+              ? "shrink-0 border-border/75 bg-background/84 font-medium text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
+              : "shrink-0 bg-background/90 font-medium text-muted-foreground"
+          }
         >
           {getTaskPositionSummaryLabel(task.position)}
         </Badge>

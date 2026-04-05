@@ -4,6 +4,8 @@ import type {
 import type { TaskStatus } from "@/contracts/tasks";
 
 export type TaskMemberLookup = Record<string, string>;
+export type TaskStatusThemeTarget = Pick<TaskStatus, "color" | "isClosed"> &
+  Partial<Pick<TaskStatus, "id" | "name" | "position">>;
 
 export function createTaskMemberLookup(
   members: Pick<ProjectMember, "id" | "name">[],
@@ -80,7 +82,7 @@ export function formatTaskStatusLabel(status: TaskStatus | string) {
   return status.name;
 }
 
-export function getTaskStatusTone(status: TaskStatus) {
+export function getTaskStatusTone(status: TaskStatusThemeTarget) {
   if (status.color === "GREEN") {
     return "done" as const;
   }
@@ -96,7 +98,7 @@ export function getTaskStatusTone(status: TaskStatus) {
   return "todo" as const;
 }
 
-export function getTaskStatusDotClassName(status: TaskStatus) {
+export function getTaskStatusDotClassName(status: TaskStatusThemeTarget) {
   switch (status.color) {
     case "BLUE":
       return "bg-[color:var(--status-blue)]";
@@ -114,30 +116,38 @@ export function getTaskStatusDotClassName(status: TaskStatus) {
   }
 }
 
-export function getTaskStatusBadgeClassName(status: TaskStatus) {
+export function getTaskStatusBadgeClassName(status: TaskStatusThemeTarget) {
   return getTaskStatusThemeClassName(status, "soft");
 }
 
-export function getTaskStatusCardClassName(status: TaskStatus) {
+export function getTaskStatusCardClassName(status: TaskStatusThemeTarget) {
   return getTaskStatusThemeClassName(status, "card");
 }
 
-export function getTaskStatusSurfaceClassName(status: TaskStatus) {
+export function getTaskStatusSurfaceClassName(status: TaskStatusThemeTarget) {
   return getTaskStatusThemeClassName(status, "surface");
 }
 
+export function getTaskStatusHeaderClassName(status: TaskStatusThemeTarget) {
+  return getTaskStatusThemeClassName(status, "header");
+}
+
+export function getTaskStatusEmptyStateClassName(status: TaskStatusThemeTarget) {
+  return getTaskStatusThemeClassName(status, "empty");
+}
+
 export function getTaskStatusChipClassName(
-  status: TaskStatus,
+  status: TaskStatusThemeTarget,
   active: boolean,
 ) {
   const base =
     "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
   if (!active) {
-    return `${base} border-transparent bg-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground`;
+    return `${base} border-transparent bg-transparent text-muted-foreground hover:border-border/70 hover:bg-muted/75 hover:text-foreground`;
   }
 
-  return `${base} ${getTaskStatusThemeClassName(status, "soft")} shadow-[0_1px_2px_rgba(15,23,42,0.04)]`;
+  return `${base} ${getTaskStatusThemeClassName(status, "soft")} shadow-[0_12px_24px_-22px_rgba(15,23,42,0.35)]`;
 }
 
 function createInitialsFromName(name: string) {
@@ -168,18 +178,27 @@ function formatBoardDate(value: string) {
 }
 
 function getTaskStatusThemeClassName(
-  status: TaskStatus,
-  tone: "soft" | "card" | "surface",
+  status: TaskStatusThemeTarget,
+  tone: "soft" | "card" | "surface" | "header" | "empty",
 ) {
   const colorKey = status.color.toLowerCase();
+  const borderColor = `border-[color:color-mix(in_srgb,var(--status-${colorKey})_38%,var(--border))]`;
 
   if (tone === "card") {
-    return `border-[color:color-mix(in_srgb,var(--status-${colorKey})_18%,var(--border))] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--status-${colorKey})_8%,white),white_52%,color-mix(in_srgb,var(--status-${colorKey})_6%,var(--surface-subtle)))]`;
+    return `${borderColor} bg-[linear-gradient(145deg,color-mix(in_srgb,var(--status-${colorKey})_18%,white),color-mix(in_srgb,var(--status-${colorKey})_8%,white)_40%,color-mix(in_srgb,var(--status-${colorKey})_14%,var(--surface-subtle)))]`;
   }
 
   if (tone === "surface") {
-    return `border-[color:color-mix(in_srgb,var(--status-${colorKey})_18%,var(--border))] bg-[color:color-mix(in_srgb,var(--status-${colorKey})_8%,white)]`;
+    return `${borderColor} bg-[linear-gradient(180deg,color-mix(in_srgb,var(--status-${colorKey})_16%,white),color-mix(in_srgb,var(--status-${colorKey})_12%,var(--surface-subtle)))]`;
   }
 
-  return `border-[color:color-mix(in_srgb,var(--status-${colorKey})_24%,transparent)] bg-[color:color-mix(in_srgb,var(--status-${colorKey})_12%,white)] text-[color:var(--status-${colorKey})]`;
+  if (tone === "header") {
+    return `border-[color:color-mix(in_srgb,var(--status-${colorKey})_50%,white)] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--status-${colorKey})_26%,white),color-mix(in_srgb,var(--status-${colorKey})_14%,var(--card))_78%)]`;
+  }
+
+  if (tone === "empty") {
+    return `border-[color:color-mix(in_srgb,var(--status-${colorKey})_44%,var(--border))] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--status-${colorKey})_14%,white),color-mix(in_srgb,var(--status-${colorKey})_8%,var(--surface-subtle)))]`;
+  }
+
+  return `border-[color:color-mix(in_srgb,var(--status-${colorKey})_56%,transparent)] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--status-${colorKey})_26%,white),color-mix(in_srgb,var(--status-${colorKey})_18%,var(--surface-subtle)))] text-[color:color-mix(in_srgb,var(--status-${colorKey})_82%,var(--foreground))] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]`;
 }

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShellChrome } from "@/components/shared/app-shell-chrome";
 
@@ -35,6 +35,7 @@ vi.mock("lucide-react", () => {
 
   return {
     Bell: Icon,
+    ChevronDown: Icon,
     ChevronUp: Icon,
     FolderKanban: Icon,
     LayoutDashboard: Icon,
@@ -122,15 +123,17 @@ describe("AppShellChrome", () => {
     });
   });
 
-  it("renders compact page navigation and keeps only the current project in context", () => {
+  it("renders page navigation with a grouped, indented project list", () => {
     navigationState.pathname = "/app/projects/qa-readiness";
 
-    render(
+    const { container } = render(
       <AppShellChrome>
         <div>Workspace content</div>
       </AppShellChrome>,
     );
 
+    expect(document.body.dataset.workspaceTheme).toBe("vivid");
+    expect(container.firstChild).toHaveAttribute("data-workspace-theme", "vivid");
     expect(
       screen.getByRole("heading", { name: "QA readiness" }),
     ).toBeInTheDocument();
@@ -144,10 +147,22 @@ describe("AppShellChrome", () => {
     expect(
       screen.getAllByRole("button", { name: /open account menu/i }).length,
     ).toBeGreaterThan(0);
+    expect(screen.getByText("Projects")).toBeInTheDocument();
+    expect(screen.getByTestId("sidebar-projects-list")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /^qa readiness$/i }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Launch planning")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /^launch planning$/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("sidebar-projects-toggle"));
+
+    expect(screen.queryByTestId("sidebar-projects-list")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("sidebar-projects-toggle"));
+
+    expect(screen.getByTestId("sidebar-projects-list")).toBeInTheDocument();
   });
 });
 

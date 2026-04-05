@@ -24,19 +24,23 @@ type TaskActivityEntryProps = {
   density?: "default" | "compact";
   entry: ActivityEntry;
   showTaskTitle?: boolean;
+  tone?: "default" | "workspace";
 };
 
 export function TaskActivityEntry({
   density = "default",
   entry,
   showTaskTitle = false,
+  tone = "workspace",
 }: TaskActivityEntryProps) {
   const fieldLabel = entry.fieldName ? getTaskActivityFieldLabel(entry.fieldName) : null;
 
   return (
     <article
       className={cn(
-        "rounded-[1rem] border border-border/70 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+        tone === "workspace"
+          ? "rounded-[1rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_3%,white),color-mix(in_oklab,var(--card)_94%,white))] shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_34px_-30px_rgba(15,23,42,0.38)]"
+          : "rounded-[1rem] border border-border/70 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
         density === "compact" ? "px-3 py-3" : "px-3.5 py-3.5",
       )}
     >
@@ -92,7 +96,9 @@ export function TaskActivityEntry({
             </div>
           </div>
 
-          {entry.fieldName ? <TaskActivityChange density={density} entry={entry} /> : null}
+          {entry.fieldName ? (
+            <TaskActivityChange density={density} entry={entry} tone={tone} />
+          ) : null}
         </div>
       </div>
     </article>
@@ -102,9 +108,11 @@ export function TaskActivityEntry({
 function TaskActivityChange({
   density,
   entry,
+  tone,
 }: {
   density: "default" | "compact";
   entry: ActivityEntry;
+  tone: "default" | "workspace";
 }) {
   const fieldName = entry.fieldName;
 
@@ -120,7 +128,9 @@ function TaskActivityChange({
     return (
       <section
         className={cn(
-          "flex flex-wrap items-center gap-2 rounded-[0.9rem] border border-border/70 bg-surface-subtle/55",
+          tone === "workspace"
+            ? "flex flex-wrap items-center gap-2 rounded-[0.9rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_3%,white),color-mix(in_oklab,var(--surface-subtle)_94%,white))] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
+            : "flex flex-wrap items-center gap-2 rounded-[0.9rem] border border-border/70 bg-surface-subtle/55",
           density === "compact" ? "px-2 py-1.5" : "px-2.5 py-2",
         )}
       >
@@ -146,7 +156,9 @@ function TaskActivityChange({
   return (
     <section
       className={cn(
-        "rounded-[0.9rem] border border-border/70 bg-surface-subtle/55",
+        tone === "workspace"
+          ? "rounded-[0.9rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_3%,white),color-mix(in_oklab,var(--surface-subtle)_94%,white))] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
+          : "rounded-[0.9rem] border border-border/70 bg-surface-subtle/55",
         density === "compact" ? "p-2" : "p-2.5",
       )}
     >
@@ -168,12 +180,14 @@ function TaskActivityChange({
         <ActivityValueCard
           density={density}
           label="Before"
+          tone={tone}
           value={formatTaskActivityValue(fieldName, entry.oldValue)}
         />
         <ArrowRight className="mx-auto size-4 text-muted-foreground" />
         <ActivityValueCard
           density={density}
           label="After"
+          tone={tone}
           value={formatTaskActivityValue(fieldName, entry.newValue)}
         />
       </div>
@@ -184,16 +198,20 @@ function TaskActivityChange({
 function ActivityValueCard({
   density,
   label,
+  tone,
   value,
 }: {
   density: "default" | "compact";
   label: string;
+  tone: "default" | "workspace";
   value: string;
 }) {
   return (
     <div
       className={cn(
-        "min-w-0 rounded-[0.85rem] border border-border/70 bg-background/90",
+        tone === "workspace"
+          ? "min-w-0 rounded-[0.85rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_2%,white),color-mix(in_oklab,var(--background)_94%,white))] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
+          : "min-w-0 rounded-[0.85rem] border border-border/70 bg-background/90",
         density === "compact" ? "px-2 py-1.5" : "px-2.5 py-2",
       )}
     >

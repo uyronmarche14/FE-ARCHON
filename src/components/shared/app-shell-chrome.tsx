@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -7,7 +8,6 @@ import { Bell, LayoutDashboard, Plus, Search } from "lucide-react";
 import { AccountMenu } from "@/components/shared/account-menu";
 import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
 import { useLogout } from "@/features/auth/hooks/use-logout";
-import { useProjects } from "@/features/projects/hooks/use-projects";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -30,14 +30,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { CreateProjectDialog } from "@/features/projects/components/create-project-dialog";
+import { ProjectsSidebarNavigation } from "@/features/projects/components/projects-sidebar-navigation";
 import { useActiveWorkspaceLabel } from "@/features/projects/hooks/use-active-workspace-label";
-import {
-  getProjectIdFromPathname,
-  getProjectPath,
-} from "@/features/projects/lib/project-paths";
-import { getProjectInitials } from "@/features/projects/lib/project-summary";
 import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
-import { cn } from "@/lib/utils";
 
 type AppShellChromeProps = {
   children: React.ReactNode;
@@ -58,22 +53,19 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
   const pathname = usePathname();
   const logoutMutation = useLogout();
   const { clearSession, session, status } = useAuthSession();
-  const projectsQuery = useProjects();
   const { closeMobileSidebar } = useSidebar();
   const activeLabel = useActiveWorkspaceLabel(pathname);
   const sessionName = session?.user.name ?? "Workspace visitor";
   const sessionEmail = session?.user.email ?? "Authentication required";
   const sessionInitials = getInitials(sessionName);
-  const currentProjectId = getProjectIdFromPathname(pathname);
-  const currentProject = currentProjectId
-    ? (projectsQuery.data?.items.find((project) => project.id === currentProjectId) ?? null)
-    : null;
-  const currentProjectHref = currentProjectId
-    ? (getProjectPath(currentProjectId) as Route)
-    : null;
-  const isCurrentProjectActive = currentProjectHref
-    ? pathname === currentProjectHref || pathname.startsWith(`${currentProjectHref}/`)
-    : false;
+
+  useEffect(() => {
+    document.body.dataset.workspaceTheme = "vivid";
+
+    return () => {
+      delete document.body.dataset.workspaceTheme;
+    };
+  }, []);
 
   async function handleLogout() {
     try {
@@ -91,7 +83,10 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
   }
 
   return (
-    <div className="flex min-h-screen bg-linear-to-br from-shell-inset via-background to-background">
+    <div
+      data-workspace-theme="vivid"
+      className="workspace-theme relative flex min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,color-mix(in_oklab,var(--primary)_11%,transparent),transparent_32%),linear-gradient(180deg,color-mix(in_oklab,var(--primary)_3%,var(--shell-inset))_0%,var(--background)_58%,color-mix(in_oklab,var(--primary)_2%,var(--background))_100%)]"
+    >
       <Sidebar>
         <SidebarHeader className="space-y-4">
           <div className="flex items-center group-data-[state=collapsed]/sidebar:justify-center">
@@ -155,48 +150,22 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-
-              {currentProjectHref ? (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isCurrentProjectActive}
-                    tooltip={currentProject?.name ?? "Current project"}
-                  >
-                    <Link
-                      href={currentProjectHref}
-                      aria-current={isCurrentProjectActive ? "page" : undefined}
-                      onClick={closeMobileSidebar}
-                    >
-                      <div
-                        aria-hidden="true"
-                        className={cn(
-                          "grid size-5 place-items-center rounded-md border text-[10px] font-semibold group-data-[state=collapsed]/sidebar:size-5",
-                          isCurrentProjectActive
-                            ? "border-transparent bg-transparent text-secondary-foreground"
-                            : "border-border bg-background text-muted-foreground",
-                        )}
-                      >
-                        {currentProject ? getProjectInitials(currentProject.name) : "PJ"}
-                      </div>
-                      <span className="min-w-0 flex-1 truncate group-data-[state=collapsed]/sidebar:hidden">
-                        {currentProject?.name ?? "Current project"}
-                      </span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ) : null}
             </SidebarMenu>
           </SidebarGroup>
+
+          <ProjectsSidebarNavigation
+            pathname={pathname}
+            onNavigate={closeMobileSidebar}
+          />
         </SidebarContent>
       </Sidebar>
 
       <SidebarInset>
-        <header className="sticky top-0 z-20 border-b border-border/50 bg-background/82 px-4 pt-4 pb-4 backdrop-blur-md sm:px-6 sm:py-5">
+        <header className="sticky top-0 z-20 border-b border-border/65 bg-background/84 px-4 pt-4 pb-4 shadow-[0_18px_42px_-34px_rgba(15,23,42,0.55)] backdrop-blur-xl sm:px-6 sm:py-5">
           <div className="flex items-center justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <SidebarTrigger />
-              <div className="min-w-0 rounded-[1rem] border border-border/60 bg-card/90 px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+              <div className="min-w-0 rounded-[1.05rem] border border-border/80 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_6%,white),color-mix(in_oklab,var(--card)_92%,white))] px-3 py-2 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.42)]">
                 <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                   Workspace
                 </p>
@@ -213,13 +182,13 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="min-w-[16rem] justify-between rounded-[1rem] bg-background border-border/80 text-muted-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] xl:min-w-[20rem] hover:bg-accent hover:text-accent-foreground"
+                      className="min-w-[16rem] justify-between rounded-[1rem] border-border/85 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_4%,white),color-mix(in_oklab,var(--background)_92%,white))] text-muted-foreground shadow-[0_16px_30px_-26px_rgba(15,23,42,0.45)] xl:min-w-[20rem]"
                     >
                       <span className="flex items-center gap-2 text-[13px]">
                         <Search className="size-4" />
                         Search projects...
                       </span>
-                      <span className="rounded-md border border-border/50 bg-muted/50 px-1.5 py-0.5 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+                      <span className="rounded-md border border-border/60 bg-background/86 px-1.5 py-0.5 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
                         Cmd K
                       </span>
                     </Button>
@@ -235,7 +204,7 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                       <Button
                         variant="outline"
                         size="icon"
-                        className="size-8 rounded-[0.95rem] border-border/80 bg-background text-muted-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                        className="size-8 rounded-[0.95rem] border-border/85 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_4%,white),color-mix(in_oklab,var(--background)_92%,white))] text-muted-foreground shadow-[0_16px_30px_-26px_rgba(15,23,42,0.45)]"
                         aria-label="Quick create project"
                       >
                         <Plus className="size-[1.05rem]" />
@@ -251,7 +220,7 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="size-9 rounded-[0.95rem] border-border/80 bg-background text-muted-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] md:hidden"
+                    className="size-9 rounded-[0.95rem] border-border/85 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_4%,white),color-mix(in_oklab,var(--background)_92%,white))] text-muted-foreground shadow-[0_16px_30px_-26px_rgba(15,23,42,0.45)] md:hidden"
                     aria-label="Search workspace"
                   >
                     <Search className="size-[1.1rem]" />
@@ -265,7 +234,7 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="size-8 rounded-[0.95rem] border-border/80 bg-background text-muted-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                    className="size-8 rounded-[0.95rem] border-border/85 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_4%,white),color-mix(in_oklab,var(--background)_92%,white))] text-muted-foreground shadow-[0_16px_30px_-26px_rgba(15,23,42,0.45)]"
                     aria-label="Notifications"
                   >
                     <Bell className="size-[1.1rem]" />
