@@ -80,7 +80,7 @@ export function KanbanBoardLane({
         return;
       }
 
-      listeners.onPointerDown?.(event);
+      listeners?.onPointerDown?.(event);
     },
     [isLaneDraggable, listeners],
   );
@@ -106,8 +106,8 @@ export function KanbanBoardLane({
             dataTestId={`lane-reorder-handle-${lane.status.id}`}
             isDragging={isDragging}
             dragButtonProps={{
-              ...(attributes as ButtonHTMLAttributes<HTMLButtonElement>),
-              ...(listeners as ButtonHTMLAttributes<HTMLButtonElement>),
+              ...((attributes ?? {}) as ButtonHTMLAttributes<HTMLButtonElement>),
+              ...((listeners ?? {}) as ButtonHTMLAttributes<HTMLButtonElement>),
             }}
           />
         ) : undefined
