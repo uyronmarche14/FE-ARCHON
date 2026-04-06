@@ -8,7 +8,6 @@ const searchParamsState = vi.hoisted(
 );
 const useLoginMock = vi.hoisted(() => vi.fn());
 const useSignupMock = vi.hoisted(() => vi.fn());
-const useResendVerificationMock = vi.hoisted(() => vi.fn());
 const useAuthSessionMock = vi.hoisted(() => vi.fn());
 const showApiErrorToastMock = vi.hoisted(() => vi.fn());
 const showInfoToastMock = vi.hoisted(() => vi.fn());
@@ -27,10 +26,6 @@ vi.mock("@/features/auth/hooks/use-login", () => ({
 
 vi.mock("@/features/auth/hooks/use-signup", () => ({
   useSignup: useSignupMock,
-}));
-
-vi.mock("@/features/auth/hooks/use-resend-verification", () => ({
-  useResendVerification: useResendVerificationMock,
 }));
 
 vi.mock("@/features/auth/providers/auth-session-provider", () => ({
@@ -57,16 +52,12 @@ describe("AuthPanel", () => {
       isPending: false,
       mutateAsync: vi.fn(),
     });
-    useResendVerificationMock.mockReturnValue({
-      isPending: false,
-      mutateAsync: vi.fn(),
-    });
     useAuthSessionMock.mockReturnValue({
       setSession: vi.fn(),
     });
   });
 
-  it("keeps the inbox verification flow when signup still requires email confirmation", async () => {
+  it("routes back to login even if the backend says verification is still required", async () => {
     const mutateAsync = vi.fn().mockResolvedValue({
       message: "Check your email to verify your account",
       email: "jane@example.com",
@@ -91,20 +82,16 @@ describe("AuthPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith({
-        name: "Jane Doe",
-        email: "jane@example.com",
-        password: "StrongPass1",
-        redirectPath: "/app/projects/project-1",
-      });
+      expect(replaceMock).toHaveBeenCalledWith(
+        "/login?email=jane%40example.com&next=%2Fapp%2Fprojects%2Fproject-1",
+      );
     });
 
-    expect(await screen.findByText(/check your inbox/i)).toBeInTheDocument();
     expect(showSuccessToastMock).toHaveBeenCalledWith(
-      "Check your email",
-      "Check your email to verify your account",
+      "Account created",
+      "Your account is ready. Continue to login to enter the workspace.",
     );
-    expect(replaceMock).not.toHaveBeenCalled();
+    expect(screen.queryByText(/check your inbox/i)).not.toBeInTheDocument();
   });
 
   it("redirects back to login when signup completes with verification bypassed", async () => {
