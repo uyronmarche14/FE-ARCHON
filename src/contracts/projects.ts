@@ -53,6 +53,10 @@ export type UpdateProjectRequest = {
   description?: string | null;
 };
 
+export type DeleteProjectResponse = {
+  message: string;
+};
+
 export type CreateProjectStatusRequest = {
   name: string;
   isClosed?: boolean;
@@ -90,6 +94,8 @@ export type CreateProjectInviteResponse = {
   message: string;
   email: string;
   expiresAt: string;
+  deliveryMode: "email" | "link";
+  inviteUrl: string | null;
 };
 
 export type InvitePreview = {
@@ -104,6 +110,25 @@ export type InvitePreview = {
     id: string;
     name: string;
   };
+};
+
+export type PendingProjectInvite = {
+  token: string;
+  createdAt: string;
+  project: {
+    id: string;
+    name: string;
+  };
+  role: ProjectRole;
+  expiresAt: string;
+  invitedBy: {
+    id: string;
+    name: string;
+  };
+};
+
+export type PendingProjectInvitesResponse = {
+  items: PendingProjectInvite[];
 };
 
 export type AcceptInviteResponse = {

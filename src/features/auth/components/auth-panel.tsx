@@ -130,6 +130,14 @@ export function AuthPanel({ mode }: AuthPanelProps) {
         redirectPath: nextPath,
       });
 
+      if (!signupResponse.emailVerificationRequired) {
+        showSuccessToast("Account created", signupResponse.message);
+        router.replace(
+          `/login?email=${encodeURIComponent(signupResponse.email)}&next=${encodeURIComponent(nextPath)}` as Route,
+        );
+        return;
+      }
+
       setVerificationNotice({
         email: signupResponse.email,
         message: signupResponse.message,
@@ -361,11 +369,11 @@ export function AuthPanel({ mode }: AuthPanelProps) {
                 <div className="mb-2 flex items-center gap-2">
                   <CheckCircle2 className="size-4 text-primary" />
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Verification required
+                    Account setup
                   </p>
                 </div>
                 <p className="text-xs leading-6 text-muted-foreground">
-                  New accounts confirm ownership through an email link before protected workspace access is allowed.
+                  New accounts complete the environment&apos;s setup flow before protected workspace access is enabled.
                 </p>
               </div>
             ) : (

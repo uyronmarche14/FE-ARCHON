@@ -26,7 +26,7 @@ export type LoginRequest = {
 export type SignupResponse = {
   message: string;
   email: string;
-  emailVerificationRequired: true;
+  emailVerificationRequired: boolean;
 };
 
 export type LoginResponse = AuthSessionResponse;

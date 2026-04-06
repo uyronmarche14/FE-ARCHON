@@ -4,19 +4,22 @@ import type { Route } from "next";
 import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, LoaderCircle, MailWarning } from "lucide-react";
+import { CheckCircle2, LoaderCircle, MailWarning, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useConfirmEmailVerification } from "@/features/auth/hooks/use-confirm-email-verification";
+import { useResendVerification } from "@/features/auth/hooks/use-resend-verification";
 import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
-import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
+import { showApiErrorToast, showInfoToast, showSuccessToast } from "@/lib/toast";
 
 export function EmailVerificationRoutePanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const confirmMutation = useConfirmEmailVerification();
+  const resendMutation = useResendVerification();
   const { status } = useAuthSession();
   const hasTriggeredRef = useRef(false);
   const token = searchParams.get("token")?.trim() ?? "";
+  const email = searchParams.get("email")?.trim().toLowerCase() ?? "";
   const requestedNextPath = searchParams.get("next");
   const fallbackNextPath = resolveSafePath(requestedNextPath);
 
@@ -44,6 +47,23 @@ export function EmailVerificationRoutePanel() {
       });
   }, [confirmMutation, fallbackNextPath, router, status, token]);
 
+  async function handleResendVerification() {
+    if (!email) {
+      return;
+    }
+
+    try {
+      const response = await resendMutation.mutateAsync({
+        email,
+        redirectPath: fallbackNextPath,
+      });
+
+      showInfoToast("Verification email resent", response.message);
+    } catch (error) {
+      showApiErrorToast(error, "Unable to resend the verification email.");
+    }
+  }
+
   const content = useMemo(() => {
     if (!token) {
       return {
@@ -58,8 +78,9 @@ export function EmailVerificationRoutePanel() {
       return {
         icon: <MailWarning className="size-5 text-destructive" />,
         title: "Verification link expired or invalid",
-        description:
-          "Request a new verification email from the login or signup flow and try again.",
+        description: email
+          ? `This verification link can no longer be used. Send a fresh link to ${email} and try again.`
+          : "Request a new verification email from the login or signup flow and try again.",
       };
     }
 
@@ -74,7 +95,7 @@ export function EmailVerificationRoutePanel() {
         ? "Redirecting you into the next step."
         : "Hold on while we confirm the link and route you back into the app flow.",
     };
-  }, [confirmMutation.isError, confirmMutation.isSuccess, token]);
+  }, [confirmMutation.isError, confirmMutation.isSuccess, email, token]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
@@ -89,11 +110,47 @@ export function EmailVerificationRoutePanel() {
 
         {confirmMutation.isError || !token ? (
           <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+            {confirmMutation.isError && email ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  void handleResendVerification();
+                }}
+                disabled={resendMutation.isPending}
+              >
+                {resendMutation.isPending ? (
+                  <>
+                    <LoaderCircle className="size-4 animate-spin" />
+                    Resending
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="size-4" />
+                    Resend email
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button asChild variant="outline">
+                <Link href="/signup">Back to signup</Link>
+              </Button>
+            )}
             <Button asChild variant="outline">
-              <Link href="/signup">Back to signup</Link>
+              <Link href={email ? `/signup?email=${encodeURIComponent(email)}` : "/signup"}>
+                Back to signup
+              </Link>
             </Button>
             <Button asChild>
-              <Link href="/login">Go to login</Link>
+              <Link
+                href={
+                  email
+                    ? `/login?email=${encodeURIComponent(email)}`
+                    : "/login"
+                }
+              >
+                Go to login
+              </Link>
             </Button>
           </div>
         ) : null}

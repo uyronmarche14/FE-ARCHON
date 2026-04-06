@@ -25,6 +25,7 @@ import type {
   ProjectSummary,
 } from "@/contracts/projects";
 import { useCreateProject } from "@/features/projects/hooks/use-create-project";
+import { useDeleteProject } from "@/features/projects/hooks/use-delete-project";
 import { useUpdateProject } from "@/features/projects/hooks/use-update-project";
 import {
   createProjectFormValues,
@@ -40,6 +41,7 @@ import {
   projectDetailQueryKey,
   projectsQueryKey,
 } from "@/features/projects/lib/project-query-keys";
+import { projectTasksQueryKey } from "@/features/tasks/lib/task-query-keys";
 import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
 import { isApiClientError } from "@/services/http/api-client-error";
 
@@ -59,6 +61,7 @@ export function ProjectEditorDialog({
   const router = useRouter();
   const queryClient = useQueryClient();
   const createProjectMutation = useCreateProject();
+  const deleteProjectMutation = useDeleteProject();
   const updateProjectMutation = useUpdateProject();
   const [open, setOpen] = useState(false);
   const [formValues, setFormValues] = useState<ProjectFormValues>(() =>
@@ -66,11 +69,13 @@ export function ProjectEditorDialog({
   );
   const [fieldErrors, setFieldErrors] = useState<ProjectFormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
   const isCreateMode = mode === "create";
-  const isPending = isCreateMode
+  const isSubmitPending = isCreateMode
     ? createProjectMutation.isPending
     : updateProjectMutation.isPending;
+  const isPending = isSubmitPending || deleteProjectMutation.isPending;
   const initialValues = useMemo(
     () => createProjectFormValues(project ?? undefined),
     [project],
@@ -194,6 +199,58 @@ export function ProjectEditorDialog({
     }
   }
 
+  async function handleDeleteProject() {
+    if (!project) {
+      return;
+    }
+
+    if (deleteConfirmation.trim() !== project.name) {
+      setFormError(`Type "${project.name}" exactly to delete this project.`);
+      return;
+    }
+
+    setFormError(null);
+
+    try {
+      await deleteProjectMutation.mutateAsync(project.id);
+
+      queryClient.setQueryData<ProjectsListResponse | undefined>(
+        projectsQueryKey,
+        (currentProjects) =>
+          currentProjects
+            ? {
+                items: currentProjects.items.filter(
+                  (currentProject) => currentProject.id !== project.id,
+                ),
+              }
+            : currentProjects,
+      );
+      queryClient.removeQueries({
+        queryKey: projectDetailQueryKey(project.id),
+      });
+      queryClient.removeQueries({
+        queryKey: projectTasksQueryKey(project.id),
+      });
+
+      resetDialogState();
+      showSuccessToast(
+        "Project deleted",
+        "The workspace was removed and the dashboard has been refreshed.",
+      );
+
+      void queryClient.invalidateQueries({
+        queryKey: projectsQueryKey,
+      });
+
+      startTransition(() => {
+        router.replace("/app");
+      });
+    } catch (error) {
+      setFormError("Unable to delete the project right now.");
+      showApiErrorToast(error, "Unable to delete the project right now.");
+    }
+  }
+
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen && isPending) {
       return;
@@ -234,6 +291,7 @@ export function ProjectEditorDialog({
     setFormValues(initialValues);
     setFieldErrors({});
     setFormError(null);
+    setDeleteConfirmation("");
   }
 
   const title = isCreateMode ? "Create a project" : "Edit project";
@@ -328,36 +386,86 @@ export function ProjectEditorDialog({
             </div>
           </section>
 
+          {!isCreateMode && project ? (
+            <section className="grid gap-4 rounded-[1.1rem] border border-destructive/25 bg-destructive/5 px-4 py-4">
+              <div className="space-y-1">
+                <Label htmlFor={`${mode}-project-delete-confirmation`}>
+                  Delete project
+                </Label>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  This permanently removes the project board, its tasks, and its
+                  activity history. Type <span className="font-semibold text-foreground">{project.name}</span> to confirm.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Input
+                  id={`${mode}-project-delete-confirmation`}
+                  value={deleteConfirmation}
+                  placeholder={project.name}
+                  onChange={(event) => {
+                    setDeleteConfirmation(event.target.value);
+                    setFormError(null);
+                  }}
+                  disabled={isPending}
+                />
+                <p className="text-xs text-muted-foreground">
+                  This action cannot be undone.
+                </p>
+              </div>
+            </section>
+          ) : null}
+
           {formError ? (
             <div className="rounded-[1rem] border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {formError}
             </div>
           ) : null}
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleOpenChange(false)}
-              disabled={isPending}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? (
-                <>
-                  <LoaderCircle className="size-3.5 animate-spin" />
-                  {pendingActionLabel}
-                </>
-              ) : isCreateMode ? (
-                <>
-                  <Plus className="size-3.5" />
-                  {primaryActionLabel}
-                </>
-              ) : (
-                primaryActionLabel
-              )}
-            </Button>
+          <DialogFooter className={!isCreateMode ? "sm:justify-between" : undefined}>
+            {!isCreateMode && project ? (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => void handleDeleteProject()}
+                disabled={isPending || deleteConfirmation.trim() !== project.name}
+              >
+                {deleteProjectMutation.isPending ? (
+                  <>
+                    <LoaderCircle className="size-3.5 animate-spin" />
+                    Deleting
+                  </>
+                ) : (
+                  "Delete project"
+                )}
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleOpenChange(false)}
+                disabled={isPending}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isSubmitPending ? (
+                  <>
+                    <LoaderCircle className="size-3.5 animate-spin" />
+                    {pendingActionLabel}
+                  </>
+                ) : isCreateMode ? (
+                  <>
+                    <Plus className="size-3.5" />
+                    {primaryActionLabel}
+                  </>
+                ) : (
+                  primaryActionLabel
+                )}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

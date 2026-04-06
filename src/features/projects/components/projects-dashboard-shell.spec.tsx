@@ -7,12 +7,17 @@ import { ProjectsDashboardShell } from "@/features/projects/components/projects-
 
 const navigationState = vi.hoisted(() => ({
   push: vi.fn(),
+  replace: vi.fn(),
 }));
 
 let projectsState: ProjectSummary[] = [];
 
 const getProjectsMock = vi.hoisted(() => vi.fn());
+const pendingInvitesHookState = vi.hoisted(() => ({
+  usePendingProjectInvites: vi.fn(),
+}));
 const createProjectMock = vi.hoisted(() => vi.fn());
+const deleteProjectMock = vi.hoisted(() => vi.fn());
 const updateProjectMock = vi.hoisted(() => vi.fn());
 const toastMocks = vi.hoisted(() => ({
   showSuccessToast: vi.fn(),
@@ -161,8 +166,14 @@ vi.mock("@/features/projects/services/get-projects", () => ({
   getProjects: getProjectsMock,
 }));
 
+vi.mock("@/features/projects/hooks/use-pending-project-invites", () => pendingInvitesHookState);
+
 vi.mock("@/features/projects/services/create-project", () => ({
   createProject: createProjectMock,
+}));
+
+vi.mock("@/features/projects/services/delete-project", () => ({
+  deleteProject: deleteProjectMock,
 }));
 
 vi.mock("@/features/projects/services/update-project", () => ({
@@ -210,12 +221,22 @@ describe("ProjectsDashboardShell", () => {
   beforeEach(() => {
     projectsState = [];
     navigationState.push.mockReset();
+    navigationState.replace.mockReset();
     getProjectsMock.mockReset();
+    pendingInvitesHookState.usePendingProjectInvites.mockReset();
     createProjectMock.mockReset();
+    deleteProjectMock.mockReset();
     updateProjectMock.mockReset();
     toastMocks.showSuccessToast.mockReset();
     toastMocks.showApiErrorToast.mockReset();
     authState.session.user.role = "MEMBER";
+    pendingInvitesHookState.usePendingProjectInvites.mockReturnValue({
+      data: {
+        items: [],
+      },
+      isPending: false,
+      isError: false,
+    });
   });
 
   it("renders a loading state before showing the simple dashboard cards", async () => {
@@ -285,6 +306,52 @@ describe("ProjectsDashboardShell", () => {
     expect(
       screen.getAllByRole("button", { name: /create project/i }).length,
     ).toBeGreaterThan(0);
+  });
+
+  it("shows the pending invites card when invite matches exist for the signed-in email", async () => {
+    getProjectsMock.mockResolvedValueOnce({
+      items: [
+        createProjectSummary("launch-planning", "Launch planning", {
+          todo: 4,
+          inProgress: 2,
+          done: 5,
+          description: "Coordinate the release work across the team.",
+        }),
+      ],
+    });
+    pendingInvitesHookState.usePendingProjectInvites.mockReturnValue({
+      data: {
+        items: [
+          {
+            token: "invite-review-token",
+            createdAt: "2026-04-07T00:00:00.000Z",
+            project: {
+              id: "project-2",
+              name: "Release Planning",
+            },
+            role: "MEMBER",
+            expiresAt: "2026-04-13T00:00:00.000Z",
+            invitedBy: {
+              id: "user-2",
+              name: "Taylor Reed",
+            },
+          },
+        ],
+      },
+      isPending: false,
+      isError: false,
+    });
+
+    renderDashboard();
+
+    expect(
+      await screen.findByRole("heading", { name: /projects/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/pending invites/i)).toBeInTheDocument();
+    expect(screen.getByText("Release Planning")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /review invite/i }),
+    ).toHaveAttribute("href", "/invite/invite-review-token");
   });
 
   it("validates, creates, refreshes, and routes into the new project", async () => {
@@ -457,6 +524,56 @@ describe("ProjectsDashboardShell", () => {
     expect(toastMocks.showSuccessToast).toHaveBeenCalledWith(
       "Project updated",
       "Project details are now in sync across the workspace.",
+    );
+  });
+
+  it("lets owners delete a project from the edit dialog after confirmation", async () => {
+    projectsState = [
+      createProjectSummary("launch-planning", "Launch planning", {
+        todo: 4,
+        inProgress: 2,
+        done: 5,
+        description: "Coordinate the release work across the team.",
+      }),
+    ];
+
+    getProjectsMock.mockImplementation(async () => ({
+      items: projectsState,
+    }));
+    deleteProjectMock.mockImplementation(async (projectId: string) => {
+      projectsState = projectsState.filter((project) => project.id !== projectId);
+
+      return {
+        message: "Project deleted successfully",
+      };
+    });
+
+    renderDashboard();
+
+    expect(await screen.findByText("Launch planning")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit project/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: /edit project/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/delete project/i), {
+      target: { value: "Launch planning" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^delete project$/i }));
+
+    await waitFor(() => {
+      expect(deleteProjectMock).toHaveBeenCalledWith("launch-planning");
+    });
+
+    await waitFor(() => {
+      expect(navigationState.replace).toHaveBeenCalledWith("/app");
+    });
+
+    expect(toastMocks.showSuccessToast).toHaveBeenCalledWith(
+      "Project deleted",
+      "The workspace was removed and the dashboard has been refreshed.",
     );
   });
 

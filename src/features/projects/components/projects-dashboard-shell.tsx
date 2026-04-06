@@ -11,7 +11,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateProjectDialog } from "@/features/projects/components/create-project-dialog";
 import { ProjectEditorDialog } from "@/features/projects/components/project-editor-dialog";
+import { PendingProjectInvitesList } from "@/features/projects/components/pending-project-invites-list";
 import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
+import { usePendingProjectInvites } from "@/features/projects/hooks/use-pending-project-invites";
 import { useProjects } from "@/features/projects/hooks/use-projects";
 import { getProjectPath } from "@/features/projects/lib/project-paths";
 import {
@@ -30,8 +32,10 @@ import { cn } from "@/lib/utils";
 export function ProjectsDashboardShell() {
   const { session } = useAuthSession();
   const projectsQuery = useProjects();
+  const pendingInvitesQuery = usePendingProjectInvites();
   const projectItems = projectsQuery.data?.items;
   const projects = useMemo(() => projectItems ?? [], [projectItems]);
+  const pendingInvites = pendingInvitesQuery.data?.items ?? [];
   const canEditAnyProjectAsAdmin = session?.user.role === "ADMIN";
 
   const totals = useMemo(() => {
@@ -205,6 +209,34 @@ export function ProjectsDashboardShell() {
           ) : null}
         </CardContent>
       </Card>
+
+      {pendingInvites.length > 0 ? (
+        <Card className="overflow-hidden border-border/80 bg-card/98">
+          <CardContent className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" size="xs">
+                  Pending invites
+                </Badge>
+                <Badge variant="muted" size="xs">
+                  {pendingInvites.length} waiting
+                </Badge>
+              </div>
+              <div className="space-y-1">
+                <p className="text-lg font-semibold tracking-tight">
+                  Invitations waiting for your review
+                </p>
+                <p className="text-sm leading-5 text-muted-foreground">
+                  If a teammate invited your current email, you can review the invite here and
+                  jump into the project from the existing accept flow.
+                </p>
+              </div>
+            </div>
+
+            <PendingProjectInvitesList items={pendingInvites} />
+          </CardContent>
+        </Card>
+      ) : null}
     </section>
   );
 }

@@ -126,7 +126,7 @@ export function InviteRoutePanel({ token }: InviteRoutePanelProps) {
               <InviteStatusCard
                 icon={<MailPlus className="size-5 text-primary" />}
                 title="Sign in or create an account to continue"
-                description="Existing users can log in and accept immediately. New users can sign up with the invited email, verify it, then return here automatically."
+                description="Existing users can log in and accept immediately. New users can sign up with the invited email, complete account setup, and return here automatically."
               />
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Button asChild className="flex-1">

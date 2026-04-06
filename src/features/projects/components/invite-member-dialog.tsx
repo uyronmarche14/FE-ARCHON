@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LoaderCircle, MailPlus } from "lucide-react";
+import { Copy, LoaderCircle, MailPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { CreateProjectInviteResponse } from "@/contracts/projects";
 import { useCreateProjectInvite } from "@/features/projects/hooks/use-create-project-invite";
-import { showApiErrorToast, showSuccessToast } from "@/lib/toast";
+import { showApiErrorToast, showInfoToast, showSuccessToast } from "@/lib/toast";
 import { isApiClientError } from "@/services/http/api-client-error";
 
 type InviteMemberDialogProps = {
@@ -29,6 +30,7 @@ export function InviteMemberDialog({ projectId }: InviteMemberDialogProps) {
   const [email, setEmail] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [inviteResult, setInviteResult] = useState<CreateProjectInviteResponse | null>(null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,6 +54,13 @@ export function InviteMemberDialog({ projectId }: InviteMemberDialogProps) {
         email: normalizedEmail,
       });
 
+      if (response.deliveryMode === "link") {
+        setInviteResult(response);
+        showSuccessToast("Invite link ready", `Share the invite link with ${response.email}.`);
+        return;
+      }
+
+      setInviteResult(null);
       showSuccessToast("Invite sent", `Invitation sent to ${response.email}.`);
       setOpen(false);
       setEmail("");
@@ -59,10 +68,28 @@ export function InviteMemberDialog({ projectId }: InviteMemberDialogProps) {
       if (isApiClientError(error) && typeof error.details?.email === "string") {
         setFieldError(error.details.email);
       } else {
-        setFormError("Unable to send the invite right now.");
+        setFormError("Unable to create the invite right now.");
       }
 
-      showApiErrorToast(error, "Unable to send the invite right now.");
+      showApiErrorToast(error, "Unable to create the invite right now.");
+    }
+  }
+
+  async function handleCopyInviteLink() {
+    if (!inviteResult?.inviteUrl) {
+      return;
+    }
+
+    if (!navigator.clipboard?.writeText) {
+      setFormError("Copying is not available in this browser.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(inviteResult.inviteUrl);
+      showInfoToast("Invite link copied", "Share the link with your teammate.");
+    } catch {
+      setFormError("Unable to copy the invite link right now.");
     }
   }
 
@@ -80,6 +107,7 @@ export function InviteMemberDialog({ projectId }: InviteMemberDialogProps) {
           setEmail("");
           setFieldError(null);
           setFormError(null);
+          setInviteResult(null);
         }
       }}
     >
@@ -97,75 +125,120 @@ export function InviteMemberDialog({ projectId }: InviteMemberDialogProps) {
               Team access
             </Badge>
             <Badge variant="muted" size="xs">
-              Email invite
+              Invite delivery
             </Badge>
           </div>
           <DialogTitle>Invite a member</DialogTitle>
           <DialogDescription>
-            Send a project invite by email. New users can sign up from the invite and existing users can accept it after login.
+            Create a project invite for a teammate. Email-enabled environments deliver it
+            automatically, hosted staging can surface a shareable link instead, and existing
+            Archon accounts will also see the invite inside the app after login.
           </DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <section className="grid gap-4 rounded-[1.1rem] border border-border/70 bg-surface-subtle/55 px-4 py-4">
-            <div className="space-y-1">
-              <Label htmlFor="invite-email">Email</Label>
-              <p className="text-xs leading-5 text-muted-foreground">
-                Invite the teammate by work email so they can join this project directly from the app flow.
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Input
-                id="invite-email"
-                value={email}
-                onChange={(event) => {
-                  setEmail(event.target.value);
-                  setFieldError(null);
-                  setFormError(null);
-                }}
-                placeholder="teammate@example.com"
-                disabled={createInviteMutation.isPending}
-              />
-              {fieldError ? (
-                <p className="text-xs text-destructive">{fieldError}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  The invite email carries the acceptance link and project context.
+        {inviteResult?.deliveryMode === "link" ? (
+          <div className="space-y-5">
+            <section className="grid gap-3 rounded-[1.1rem] border border-border/70 bg-surface-subtle/55 px-4 py-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Invite link ready</p>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  This environment is using direct invite links instead of email delivery. Share the link with {inviteResult.email}.
                 </p>
-              )}
-            </div>
-          </section>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-link">Invite URL</Label>
+                <Input id="invite-link" readOnly value={inviteResult.inviteUrl ?? ""} />
+                <p className="text-xs text-muted-foreground">
+                  The link stays active until {new Date(inviteResult.expiresAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}.
+                </p>
+              </div>
+            </section>
 
-          {formError ? (
-            <div className="rounded-[1rem] border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {formError}
-            </div>
-          ) : null}
+            {formError ? (
+              <div className="rounded-[1rem] border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {formError}
+              </div>
+            ) : null}
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={createInviteMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={createInviteMutation.isPending}>
-              {createInviteMutation.isPending ? (
-                <>
-                  <LoaderCircle className="size-3.5 animate-spin" />
-                  Sending
-                </>
-              ) : (
-                <>
-                  <MailPlus className="size-3.5" />
-                  Send invite
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Close
+              </Button>
+              <Button type="button" onClick={() => void handleCopyInviteLink()}>
+                <Copy className="size-3.5" />
+                Copy link
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            <section className="grid gap-4 rounded-[1.1rem] border border-border/70 bg-surface-subtle/55 px-4 py-4">
+              <div className="space-y-1">
+                <Label htmlFor="invite-email">Email</Label>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Invite the teammate by work email so the generated access path stays tied to the
+                  right account and can appear inside their dashboard after login.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Input
+                  id="invite-email"
+                  value={email}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setFieldError(null);
+                    setFormError(null);
+                  }}
+                  placeholder="teammate@example.com"
+                  disabled={createInviteMutation.isPending}
+                />
+                {fieldError ? (
+                  <p className="text-xs text-destructive">{fieldError}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Archon will either deliver the invite by email or return a direct share link
+                    for this environment. Matching existing accounts will also see it inside the
+                    workspace.
+                  </p>
+                )}
+              </div>
+            </section>
+
+            {formError ? (
+              <div className="rounded-[1rem] border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {formError}
+              </div>
+            ) : null}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+                disabled={createInviteMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createInviteMutation.isPending}>
+                {createInviteMutation.isPending ? (
+                  <>
+                    <LoaderCircle className="size-3.5 animate-spin" />
+                    Sending
+                  </>
+                ) : (
+                  <>
+                    <MailPlus className="size-3.5" />
+                    Send invite
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );

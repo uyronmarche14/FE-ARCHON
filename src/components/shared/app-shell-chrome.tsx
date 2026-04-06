@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -9,6 +9,12 @@ import { AccountMenu } from "@/components/shared/account-menu";
 import { useAuthSession } from "@/features/auth/providers/auth-session-provider";
 import { useLogout } from "@/features/auth/hooks/use-logout";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -29,6 +35,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { WorkspaceNotificationsList } from "@/features/notifications/components/workspace-notifications-list";
+import { useWorkspaceNotifications } from "@/features/notifications/hooks/use-workspace-notifications";
 import { CreateProjectDialog } from "@/features/projects/components/create-project-dialog";
 import { ProjectsSidebarNavigation } from "@/features/projects/components/projects-sidebar-navigation";
 import { useActiveWorkspaceLabel } from "@/features/projects/hooks/use-active-workspace-label";
@@ -55,9 +63,12 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
   const { clearSession, session, status } = useAuthSession();
   const { closeMobileSidebar } = useSidebar();
   const activeLabel = useActiveWorkspaceLabel(pathname);
+  const notificationsQuery = useWorkspaceNotifications();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const sessionName = session?.user.name ?? "Workspace visitor";
   const sessionEmail = session?.user.email ?? "Authentication required";
   const sessionInitials = getInitials(sessionName);
+  const notificationCount = notificationsQuery.totalCount;
 
   useEffect(() => {
     document.body.dataset.workspaceTheme = "vivid";
@@ -229,19 +240,52 @@ function AppShellChromeLayout({ children }: AppShellChromeProps) {
                 <TooltipContent>Search is visual-only in this pass.</TooltipContent>
               </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
+              <DropdownMenu open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+                <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
                     size="icon"
-                    className="size-8 rounded-[0.95rem] border-border/85 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_4%,white),color-mix(in_oklab,var(--background)_92%,white))] text-muted-foreground shadow-[0_16px_30px_-26px_rgba(15,23,42,0.45)]"
+                    className="relative size-8 rounded-[0.95rem] border-border/85 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_4%,white),color-mix(in_oklab,var(--background)_92%,white))] text-muted-foreground shadow-[0_16px_30px_-26px_rgba(15,23,42,0.45)]"
                     aria-label="Notifications"
                   >
                     <Bell className="size-[1.1rem]" />
+                    {notificationCount > 0 ? (
+                      <span className="absolute -top-1 -right-1 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                        {notificationCount}
+                      </span>
+                    ) : null}
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent>Notifications are visual-only in this pass.</TooltipContent>
-              </Tooltip>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[22rem] space-y-3 p-3">
+                  <div className="space-y-1">
+                    <DropdownMenuLabel className="px-0 py-0 text-[11px] tracking-[0.18em]">
+                      Notifications
+                    </DropdownMenuLabel>
+                    <p className="text-sm text-muted-foreground">
+                      Invites and recent task assignments for your current account.
+                    </p>
+                  </div>
+
+                  {notificationsQuery.isPending ? (
+                    <p className="text-sm text-muted-foreground">
+                      Loading notifications...
+                    </p>
+                  ) : notificationsQuery.isError ? (
+                    <p className="text-sm text-muted-foreground">
+                      We couldn&apos;t load notifications right now.
+                    </p>
+                  ) : notificationCount === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No notifications yet.
+                    </p>
+                  ) : (
+                    <WorkspaceNotificationsList
+                      items={notificationsQuery.items}
+                      onSelect={() => setNotificationsOpen(false)}
+                    />
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <div className="md:hidden">
                 <AccountMenu

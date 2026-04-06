@@ -29,17 +29,22 @@ const authState = vi.hoisted(() => ({
 const projectsHookState = vi.hoisted(() => ({
   useProjects: vi.fn(),
 }));
+const workspaceNotificationsHookState = vi.hoisted(() => ({
+  useWorkspaceNotifications: vi.fn(),
+}));
 
 vi.mock("lucide-react", () => {
   const Icon = () => null;
 
   return {
     Bell: Icon,
+    BellDot: Icon,
     ChevronDown: Icon,
     ChevronUp: Icon,
     FolderKanban: Icon,
     LayoutDashboard: Icon,
     LogOut: Icon,
+    MailPlus: Icon,
     MoreHorizontal: Icon,
     Menu: Icon,
     PanelLeft: Icon,
@@ -47,6 +52,7 @@ vi.mock("lucide-react", () => {
     RefreshCcw: Icon,
     Search: Icon,
     ShieldCheck: Icon,
+    UserRoundPlus: Icon,
   };
 });
 
@@ -80,6 +86,8 @@ vi.mock("@/features/auth/hooks/use-logout", () => ({
 
 vi.mock("@/features/projects/hooks/use-projects", () => projectsHookState);
 
+vi.mock("@/features/notifications/hooks/use-workspace-notifications", () => workspaceNotificationsHookState);
+
 vi.mock("@/features/projects/components/create-project-dialog", () => ({
   CreateProjectDialog: ({
     trigger,
@@ -100,6 +108,7 @@ describe("AppShellChrome", () => {
     logoutState.mutateAsync.mockReset();
     authState.clearSession.mockReset();
     projectsHookState.useProjects.mockReset();
+    workspaceNotificationsHookState.useWorkspaceNotifications.mockReset();
     projectsHookState.useProjects.mockReturnValue({
       data: {
         items: [
@@ -120,6 +129,12 @@ describe("AppShellChrome", () => {
       isPending: false,
       isError: false,
       refetch: vi.fn(),
+    });
+    workspaceNotificationsHookState.useWorkspaceNotifications.mockReturnValue({
+      items: [],
+      totalCount: 0,
+      isPending: false,
+      isError: false,
     });
   });
 
@@ -163,6 +178,55 @@ describe("AppShellChrome", () => {
     fireEvent.click(screen.getByTestId("sidebar-projects-toggle"));
 
     expect(screen.getByTestId("sidebar-projects-list")).toBeInTheDocument();
+  });
+
+  it("shows invite notifications in the bell dropdown when pending invites exist", () => {
+    workspaceNotificationsHookState.useWorkspaceNotifications.mockReturnValue({
+      items: [
+        {
+          id: "invite-review-token",
+          type: "invite",
+          createdAt: "2026-04-07T01:05:00.000Z",
+          title: "Client Launch",
+          description: "Invited by Morgan Lee as member.",
+          href: "/invite/invite-review-token",
+          badgeLabel: "Invite",
+        },
+        {
+          id: "assignment-log-1",
+          type: "task_assigned",
+          createdAt: "2026-04-07T01:15:00.000Z",
+          title: "Review launch checklist",
+          description: "Morgan Lee assigned you in Client Launch.",
+          href: "/app/projects/project-3",
+          badgeLabel: "Assigned",
+        },
+      ],
+      totalCount: 2,
+      isPending: false,
+      isError: false,
+    });
+
+    render(
+      <AppShellChrome>
+        <div>Workspace content</div>
+      </AppShellChrome>,
+    );
+
+    expect(screen.getAllByText("2").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /notifications/i }));
+
+    expect(screen.getByText("Client Launch")).toBeInTheDocument();
+    expect(screen.getByText("Review launch checklist")).toBeInTheDocument();
+    expect(screen.getByText("Invite")).toBeInTheDocument();
+    expect(screen.getByText("Assigned")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /review invite/i }),
+    ).toHaveAttribute("href", "/invite/invite-review-token");
+    expect(
+      screen.getByRole("link", { name: /open project/i }),
+    ).toHaveAttribute("href", "/app/projects/project-3");
   });
 });
 
