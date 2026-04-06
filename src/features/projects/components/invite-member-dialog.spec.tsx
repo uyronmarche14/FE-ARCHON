@@ -67,7 +67,7 @@ describe("InviteMemberDialog", () => {
     });
   });
 
-  it("keeps the existing success flow when invites are delivered by email", async () => {
+  it("keeps a neutral success flow when invites are delivered by email", async () => {
     const mutateAsync = vi.fn().mockResolvedValue({
       message: "Invite sent successfully",
       email: "alex@example.com",
@@ -85,12 +85,12 @@ describe("InviteMemberDialog", () => {
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "alex@example.com" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /send invite/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create invite/i }));
 
     await waitFor(() => {
       expect(showSuccessToastMock).toHaveBeenCalledWith(
-        "Invite sent",
-        "Invitation sent to alex@example.com.",
+        "Invite created",
+        "Access is ready for alex@example.com.",
       );
     });
 
@@ -116,7 +116,7 @@ describe("InviteMemberDialog", () => {
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "alex@example.com" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /send invite/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create invite/i }));
 
     expect(await screen.findByText(/invite link ready/i)).toBeInTheDocument();
     expect(

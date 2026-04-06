@@ -61,7 +61,7 @@ export function InviteMemberDialog({ projectId }: InviteMemberDialogProps) {
       }
 
       setInviteResult(null);
-      showSuccessToast("Invite sent", `Invitation sent to ${response.email}.`);
+      showSuccessToast("Invite created", `Access is ready for ${response.email}.`);
       setOpen(false);
       setEmail("");
     } catch (error) {
@@ -130,9 +130,8 @@ export function InviteMemberDialog({ projectId }: InviteMemberDialogProps) {
           </div>
           <DialogTitle>Invite a member</DialogTitle>
           <DialogDescription>
-            Create a project invite for a teammate. Email-enabled environments deliver it
-            automatically, hosted staging can surface a shareable link instead, and existing
-            Archon accounts will also see the invite inside the app after login.
+            Create a project invite for a teammate. This main flow uses direct invite links,
+            and existing Archon accounts will also see matching invites inside the app after login.
           </DialogDescription>
         </DialogHeader>
 
@@ -142,7 +141,7 @@ export function InviteMemberDialog({ projectId }: InviteMemberDialogProps) {
               <div className="space-y-1">
                 <p className="text-sm font-medium text-foreground">Invite link ready</p>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  This environment is using direct invite links instead of email delivery. Share the link with {inviteResult.email}.
+                  Share this link with {inviteResult.email}. Matching existing accounts will also see the invite inside the workspace.
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -181,7 +180,7 @@ export function InviteMemberDialog({ projectId }: InviteMemberDialogProps) {
                 <Label htmlFor="invite-email">Email</Label>
                 <p className="text-xs leading-5 text-muted-foreground">
                   Invite the teammate by work email so the generated access path stays tied to the
-                  right account and can appear inside their dashboard after login.
+                  right account and appears in their dashboard after login.
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -200,9 +199,8 @@ export function InviteMemberDialog({ projectId }: InviteMemberDialogProps) {
                   <p className="text-xs text-destructive">{fieldError}</p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    Archon will either deliver the invite by email or return a direct share link
-                    for this environment. Matching existing accounts will also see it inside the
-                    workspace.
+                    Archon will generate a direct invite link for this teammate. Matching existing
+                    accounts will also see the invite inside the workspace.
                   </p>
                 )}
               </div>
@@ -227,12 +225,12 @@ export function InviteMemberDialog({ projectId }: InviteMemberDialogProps) {
                 {createInviteMutation.isPending ? (
                   <>
                     <LoaderCircle className="size-3.5 animate-spin" />
-                    Sending
+                    Creating
                   </>
                 ) : (
                   <>
                     <MailPlus className="size-3.5" />
-                    Send invite
+                    Create invite
                   </>
                 )}
               </Button>

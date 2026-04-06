@@ -93,32 +93,6 @@ vi.mock("@/components/ui/tooltip", async () => {
   };
 });
 
-vi.mock("@/components/ui/hover-card", async () => {
-  const React = await import("react");
-
-  function HoverCard({ children }: MockChildrenProps) {
-    return React.createElement(React.Fragment, null, children);
-  }
-
-  function HoverCardTrigger({ asChild, children }: MockTriggerProps) {
-    if (asChild && React.isValidElement(children)) {
-      return children;
-    }
-
-    return React.createElement("button", { type: "button" }, children);
-  }
-
-  function HoverCardContent({ children, ...props }: MockChildrenProps) {
-    return React.createElement("div", props, children);
-  }
-
-  return {
-    HoverCard,
-    HoverCardContent,
-    HoverCardTrigger,
-  };
-});
-
 vi.mock("@/components/ui/dropdown-menu", async () => {
   const React = await import("react");
 

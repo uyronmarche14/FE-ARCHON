@@ -42,22 +42,3 @@ export type AuthRefreshResponse = {
 export type LogoutResponse = {
   loggedOut: true;
 };
-
-export type VerifyEmailConfirmRequest = {
-  token: string;
-};
-
-export type VerifyEmailConfirmResponse = {
-  verified: true;
-  email: string;
-  redirectPath: string | null;
-};
-
-export type ResendVerificationRequest = {
-  email: string;
-  redirectPath?: string;
-};
-
-export type ResendVerificationResponse = {
-  message: string;
-};
